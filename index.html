@@ -81,6 +81,12 @@
     50%{ transform:translateX(-50%) scale(1.18); }
   }
   .unit { position:absolute; bottom:16%; text-align:center; width:90px; z-index:2; }
+  .unit::before {
+    content:''; position:absolute; top:46px; left:50%; transform:translateX(-50%);
+    width:48px; height:11px; border-radius:50%;
+    background:radial-gradient(ellipse, rgba(20,30,15,.28) 0%, rgba(20,30,15,0) 70%);
+    pointer-events:none;
+  }
   #playerUnit { left:12%; }
   #monsterUnit { right:12%; }
   .sprite { font-size:50px; line-height:1; display:inline-block; filter:drop-shadow(0 4px 3px rgba(0,0,0,.2)); }
@@ -416,20 +422,20 @@ const TIERS = [
 ];
 
 const MONSTERS = [
-  { emoji:'🐌', name:'달팽이' },   { emoji:'🐛', name:'애벌레' },
-  { emoji:'🐸', name:'개구리' },   { emoji:'🐀', name:'들쥐' },
-  { emoji:'🦗', name:'메뚜기' },   { emoji:'🦂', name:'전갈' },
-  { emoji:'🦇', name:'박쥐' },     { emoji:'🐍', name:'독사' },
-  { emoji:'🕷️', name:'거미' },    { emoji:'🐺', name:'늑대' },
-  { emoji:'🧟', name:'좀비' },     { emoji:'👻', name:'유령' },
-  { emoji:'👺', name:'고블린' },   { emoji:'👹', name:'오우거' },
-  { emoji:'💀', name:'해골 기사' },{ emoji:'🐲', name:'와이번' },
+  { emoji:'🐌', name:'점액 달팽이' }, { emoji:'🐛', name:'독침 애벌레' },
+  { emoji:'🐸', name:'늪지 두꺼비' }, { emoji:'🐀', name:'던전 쥐' },
+  { emoji:'🦗', name:'칼날 메뚜기' }, { emoji:'🦂', name:'사막 전갈' },
+  { emoji:'🦇', name:'동굴 박쥐' },   { emoji:'🐍', name:'독니 뱀' },
+  { emoji:'🕷️', name:'거대 거미' },  { emoji:'🐺', name:'어둠 늑대' },
+  { emoji:'🧟', name:'좀비' },        { emoji:'👻', name:'원혼' },
+  { emoji:'👺', name:'고블린' },      { emoji:'👹', name:'오우거' },
+  { emoji:'💀', name:'해골 기사' },   { emoji:'🐲', name:'와이번' },
 ];
 const BOSSES = [
   { emoji:'👹', name:'붉은 오우거' }, { emoji:'👿', name:'임프 군주' },
   { emoji:'🧌', name:'트롤 족장' },   { emoji:'👾', name:'심연의 마물' },
   { emoji:'💀', name:'리치 왕' },     { emoji:'😈', name:'대악마' },
-  { emoji:'🐉', name:'고대 용' },
+  { emoji:'🐉', name:'타락한 고룡' },
 ];
 const DUNGEON_MOBS = [
   { emoji:'🪙', name:'골드 슬라임' },
@@ -476,19 +482,19 @@ const AWAKEN_REQ = 10;   // 각성 요구 스킬 레벨 (표시 기준)
 const SET_BONUS = [0, 0.05, 0.12, 0.25, 0.45, 0.8];   // 전 부위 최소 등급별 세트 보너스
 
 const PETS = [
-  { id:'mouse',   emoji:'🐭', name:'생쥐',   r:0, type:'gold',    per:0.02 },
-  { id:'chick',   emoji:'🐤', name:'병아리', r:0, type:'atk',     per:0.01 },
-  { id:'turtle',  emoji:'🐢', name:'거북이', r:0, type:'hp',      per:0.02 },
-  { id:'dog',     emoji:'🐶', name:'강아지', r:1, type:'atk',     per:0.02 },
-  { id:'cat',     emoji:'🐱', name:'고양이', r:1, type:'gold',    per:0.04 },
-  { id:'rabbit',  emoji:'🐰', name:'토끼',   r:1, type:'hp',      per:0.04 },
-  { id:'fox',     emoji:'🦊', name:'여우',   r:2, type:'atk',     per:0.04 },
-  { id:'owl',     emoji:'🦉', name:'부엉이', r:2, type:'critdmg', per:0.05 },
-  { id:'panda',   emoji:'🐼', name:'판다',   r:2, type:'hp',      per:0.08 },
-  { id:'unicorn', emoji:'🦄', name:'유니콘', r:3, type:'atk',     per:0.07 },
-  { id:'tiger',   emoji:'🐯', name:'호랑이', r:3, type:'gold',    per:0.10 },
-  { id:'drake',   emoji:'🐲', name:'새끼용', r:4, type:'atk',     per:0.12 },
-  { id:'goldragon', emoji:'🐉', name:'황금용', r:5, type:'all',   per:0.10 },
+  { id:'mouse',   emoji:'🐭', name:'보물 쥐',     r:0, type:'gold',    per:0.02 },
+  { id:'chick',   emoji:'🐤', name:'아기 피닉스', r:0, type:'atk',     per:0.01 },
+  { id:'turtle',  emoji:'🐢', name:'바위 거북',   r:0, type:'hp',      per:0.02 },
+  { id:'dog',     emoji:'🐶', name:'수호견',      r:1, type:'atk',     per:0.02 },
+  { id:'cat',     emoji:'🐱', name:'요정 고양이', r:1, type:'gold',    per:0.04 },
+  { id:'rabbit',  emoji:'🐰', name:'달토끼',      r:1, type:'hp',      per:0.04 },
+  { id:'fox',     emoji:'🦊', name:'구미호',      r:2, type:'atk',     per:0.04 },
+  { id:'owl',     emoji:'🦉', name:'현자 부엉이', r:2, type:'critdmg', per:0.05 },
+  { id:'panda',   emoji:'🐼', name:'영물 판다',   r:2, type:'hp',      per:0.08 },
+  { id:'unicorn', emoji:'🦄', name:'유니콘',      r:3, type:'atk',     per:0.07 },
+  { id:'tiger',   emoji:'🐯', name:'산신 호랑이', r:3, type:'gold',    per:0.10 },
+  { id:'drake',   emoji:'🐲', name:'드레이크',    r:4, type:'atk',     per:0.12 },
+  { id:'goldragon', emoji:'🐉', name:'황금 신룡', r:5, type:'all',     per:0.10 },
 ];
 const PET_TYPE_LABEL = { gold:'골드', atk:'공격력', hp:'체력', critdmg:'치명피해', all:'전능력' };
 const PET_RARITY_W = [40, 30, 16, 9, 4, 1];
