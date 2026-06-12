@@ -1,4 +1,4 @@
-// PWA 아이콘 생성기 — 의존성 없이 순수 Node(zlib)로 버섯 아이콘 PNG 생성
+// PWA 아이콘 생성기 — 의존성 없이 순수 Node(zlib)로 용알 아이콘 PNG 생성
 // 사용법: node tests/make-icons.js  (프로젝트 루트에 icon-192.png, icon-512.png 생성)
 'use strict';
 const fs = require('fs');
@@ -58,10 +58,9 @@ function drawIcon(size) {
     px[i] = rgb[0]; px[i+1] = rgb[1]; px[i+2] = rgb[2]; px[i+3] = al;
   };
   const BG = hex('#3b2f55'), BG2 = hex('#2b2438');
-  const CAP = hex('#e84a42'), CAP_D = hex('#c63832');
-  const DOT = hex('#fff6e8');
-  const STEM = hex('#ffeed2'), STEM_D = hex('#e8d4b0');
-  const EYE = hex('#5a4a3a');
+  const EGG = hex('#eef8e4'), EGG_D = hex('#cfe8c0');
+  const SPOT = hex('#7fc98f');
+  const EYE = hex('#3a4a3a');
 
   const u = size / 100; // 100×100 좌표계
   const inRRect = (x, y, r) => {
@@ -83,29 +82,23 @@ function drawIcon(size) {
         ]);
       }
       const fx = x/u, fy = y/u; // 0~100
-      // 줄기 (라운드 기둥)
-      if (fx >= 38 && fx <= 62 && fy >= 48 && fy <= 80) {
-        const edge = Math.min(fx-38, 62-fx);
-        if (fy <= 76 || edge > 4 - (fy-76)) put(x, y, edge < 2.5 ? STEM_D : STEM);
+      // 알 (위가 약간 뾰족한 타원)
+      const ry = fy < 50 ? 36 : 30;   // 위쪽 반경을 길게 → 달걀형
+      const dx = (fx-50)/25, dy = (fy-52)/ry;
+      const inEgg = dx*dx + dy*dy <= 1;
+      if (inEgg) {
+        put(x, y, fy > 66 ? EGG_D : EGG);   // 아래쪽 음영
       }
-      // 갓 (반타원 돔)
-      const dx = (fx-50)/34, dy = (fy-46)/30;
-      if (dx*dx + dy*dy <= 1 && fy <= 50) {
-        put(x, y, fy > 44 ? CAP_D : CAP);
+      // 알의 초록 점무늬
+      for (const [px2, py2, r] of [[40,34,5],[60,28,6],[63,52,5],[38,58,6],[50,70,5]]) {
+        if ((fx-px2)**2 + (fy-py2)**2 <= r*r && inEgg) put(x, y, SPOT);
       }
-      // 갓 흰 점
-      for (const [px2, py2, r] of [[36,32,6],[60,24,7],[64,40,5]]) {
-        if ((fx-px2)**2 + (fy-py2)**2 <= r*r) {
-          const ddx = (fx-50)/34, ddy = (fy-46)/30;
-          if (ddx*ddx + ddy*ddy <= 1 && fy <= 50) put(x, y, DOT);
-        }
-      }
-      // 눈
+      // 눈 (알에서 곧 태어날 듯한 표정)
       for (const ex of [44, 56]) {
-        if ((fx-ex)**2 + (fy-60)**2 <= 2.2*2.2) put(x, y, EYE);
+        if ((fx-ex)**2 + (fy-46)**2 <= 2.4*2.4) put(x, y, EYE);
       }
-      // 입 (작은 호)
-      if (fy >= 65 && fy <= 67 && fx >= 47 && fx <= 53) put(x, y, EYE);
+      // 입
+      if (fy >= 52 && fy <= 54 && fx >= 47 && fx <= 53) put(x, y, EYE);
     }
   }
   return Buffer.from(px.buffer);

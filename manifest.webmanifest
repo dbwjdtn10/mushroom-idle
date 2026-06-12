@@ -1,7 +1,7 @@
 {
-  "name": "버섯 키우기",
-  "short_name": "버섯키우기",
-  "description": "램프를 문질러 장비를 모으고 버섯을 키우는 방치형 RPG",
+  "name": "용알 키우기",
+  "short_name": "용알키우기",
+  "description": "램프를 문질러 장비를 모으고 알에서 용신까지 키우는 방치형 RPG",
   "lang": "ko",
   "start_url": "./index.html",
   "scope": "./",

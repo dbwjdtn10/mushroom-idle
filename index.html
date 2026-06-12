@@ -7,11 +7,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="버섯 키우기">
+<meta name="apple-mobile-web-app-title" content="용알 키우기">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>🍄 버섯 키우기</title>
+<title>🐉 용알 키우기</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
   html,body { height:100%; }
@@ -300,11 +300,11 @@
 <div id="app">
 
   <div id="topbar">
-    <div id="charInfo">🍄 Lv.1<small>아기 버섯</small></div>
+    <div id="charInfo">🥚 Lv.1<small>용의 알</small></div>
     <div style="display:flex; gap:9px;">
       <div class="resource">💰 <span id="goldText">0</span></div>
       <div class="resource">💎 <span id="diaText">0</span></div>
-      <div class="resource">🌀 <span id="sporeText">0</span></div>
+      <div class="resource">🧿 <span id="sporeText">0</span></div>
     </div>
   </div>
 
@@ -315,9 +315,9 @@
     <button id="retryBossBtn">👹 보스 재도전</button>
     <div class="unit" id="playerUnit">
       <span id="petSprite">🐭</span>
-      <span class="sprite" id="playerSprite">🍄</span>
+      <span class="sprite" id="playerSprite">🥚</span>
       <div class="hpbar"><div class="hpfill" id="playerHpFill"></div></div>
-      <div class="unitname" id="playerName">아기 버섯</div>
+      <div class="unitname" id="playerName">용의 알</div>
     </div>
     <div class="unit" id="monsterUnit">
       <span class="sprite" id="monsterSprite">🐌</span>
@@ -365,10 +365,10 @@
 <script>
 'use strict';
 /* =========================================================
-   🍄 버섯 키우기 v4 — 모바일 방치형 RPG
+   🐉 용알 키우기 — 모바일 방치형 RPG
    스킬 · 펫 · 다이아 · 퀘스트 · 업적 · 유물 · 존 · 사운드
    v3: 장비 강화 · 골드 던전 · 환생 시작 골드
-   v4: 탭 공격 · 황금 버섯 · 펫 성급 진화 · 다이아 던전 · 도감 · 자동화
+   v4: 탭 공격 · 황금 알 · 펫 성급 진화 · 다이아 던전 · 도감 · 자동화
    v5: 전직 시스템 (검사/궁수/법사 · 1~4차 시험) · 전투력
    v6: 무한의 탑 (층별 연속 등반 · 첫 클리어 보상)
    v7: 스킬 각성 (고유 효과) · 장비 세트 효과
@@ -405,14 +405,14 @@ const RARITIES = [
 ];
 
 const TIERS = [
-  { lv:1,   emoji:'🍄', name:'아기 버섯' },
-  { lv:10,  emoji:'🌱', name:'새싹 모험가' },
-  { lv:25,  emoji:'🗡️', name:'견습 검사' },
-  { lv:50,  emoji:'⚔️', name:'정예 기사' },
-  { lv:90,  emoji:'🛡️', name:'로얄 가드' },
-  { lv:140, emoji:'🧙', name:'대마법사' },
-  { lv:200, emoji:'🦸', name:'버섯 영웅' },
-  { lv:280, emoji:'🌟', name:'전설의 버섯신' },
+  { lv:1,   emoji:'🥚', name:'용의 알' },
+  { lv:10,  emoji:'🦎', name:'새끼 도마뱀' },
+  { lv:25,  emoji:'🦕', name:'아기 용' },
+  { lv:50,  emoji:'🦖', name:'사나운 용' },
+  { lv:90,  emoji:'🐲', name:'비룡' },
+  { lv:140, emoji:'🐉', name:'성룡' },
+  { lv:200, emoji:'👑', name:'용왕' },
+  { lv:280, emoji:'🌟', name:'전설의 용신' },
 ];
 
 const MONSTERS = [
@@ -544,7 +544,7 @@ function defaultState() {
     petStars: {},             // id -> 성급 (0~5)
     codex: { mobs:{}, bosses:{}, rarities:{} },
     relics: { gold:0, atk:0, hp:0, time:0, critdmg:0 },
-    spores: 0,                // 사용 가능한 포자 (유물 구매용)
+    spores: 0,                // 사용 가능한 용비늘 (유물 구매용 — 내부 키는 구버전 호환 위해 spores 유지)
     life: { kills:0, bossKills:0, pulls:0, sporesEarned:0, rebirths:0, bestStage:1 },
     daily: { date:'', counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0 }, claimed:{} },
     achLv: {},                // 업적 id -> 수령한 단계 수
@@ -1108,7 +1108,7 @@ function exitDungeon(died) {
   saveGame();
 }
 
-/* ---------- 탭 공격 / 황금 버섯 ---------- */
+/* ---------- 탭 공격 / 황금 알 ---------- */
 $('battle').addEventListener('pointerdown', e => {
   if (e.target.closest && e.target.closest('button')) return;
   if (e.target.classList && e.target.classList.contains('golden')) return;
@@ -1133,7 +1133,7 @@ function spawnGolden() {
   const battle = $('battle');
   const el = document.createElement('div');
   el.className = 'golden';
-  el.textContent = '🍄';
+  el.textContent = '🥚';
   el.style.left = rnd(15, 72) + '%';
   el.style.top = rnd(18, 52) + '%';
   let claimed = false;
@@ -1145,13 +1145,13 @@ function spawnGolden() {
       const d = 5 + Math.floor(Math.random() * 8);
       S.dia += d;
       sfx('dia');
-      toast('🌟 황금 버섯! 💎 +' + d);
+      toast('🌟 황금 알! 💎 +' + d);
     } else {
       const est = Math.max(S.stage, Math.floor(S.maxStage * 0.9));
       const g = Math.floor(mobGold(est) * 40 * stats.goldMult);
       S.gold += g;
       sfx('win');
-      toast('🌟 황금 버섯! 💰 +' + fmt(g));
+      toast('🌟 황금 알! 💰 +' + fmt(g));
     }
     el.remove();
     saveGame();
@@ -1421,7 +1421,7 @@ function buyRelic(id) {
   const r = RELICS.find(r => r.id === id);
   if (!r) return;
   const cost = relicCost(r);
-  if (S.spores < cost) { toast('🌀 포자가 부족합니다! (환생으로 획득)'); return; }
+  if (S.spores < cost) { toast('🧿 용비늘이 부족합니다! (환생으로 획득)'); return; }
   S.spores -= cost;
   S.relics[id]++;
   recalcStats();
@@ -1437,7 +1437,7 @@ function sporeGain() {
 function doPrestige() {
   const gain = sporeGain();
   if (gain <= 0) return;
-  showModal('🌀', '환생하시겠습니까?', '포자 +' + gain + '개를 얻고 처음부터 다시 시작합니다.\n(스테이지·골드·레벨·장비·강화·스킬 초기화)\n\n✅ 유지: 펫·성급, 전직, 탑 기록, 스킬 각성, 다이아, 유물, 업적, 도감, 영구 보너스\n환생 후 영구 보너스: +' + ((S.life.sporesEarned+gain)*2) + '%\n🎁 시작 골드 +' + fmt((S.life.sporesEarned+gain)*100), [
+  showModal('🌀', '환생하시겠습니까?', '용비늘 +' + gain + '개를 얻고 처음부터 다시 시작합니다.\n(스테이지·골드·레벨·장비·강화·스킬 초기화)\n\n✅ 유지: 펫·성급, 전직, 탑 기록, 스킬 각성, 다이아, 유물, 업적, 도감, 영구 보너스\n환생 후 영구 보너스: +' + ((S.life.sporesEarned+gain)*2) + '%\n🎁 시작 골드 +' + fmt((S.life.sporesEarned+gain)*100), [
     { label:'환생!', cb: ()=>{
         const keep = {
           dia:S.dia, pets:S.pets, petStars:S.petStars, codex:S.codex, relics:S.relics,
@@ -1653,17 +1653,17 @@ function renderPanel() {
   } else if (activeTab === 'prestige') {
     const gain = sporeGain();
     const can = gain > 0;
-    let html = '<div class="prestigeHead"><h3>🌀 환생 &nbsp;<span style="font-size:11px; color:#8a7a68;">보유 포자 ' + fmt(S.spores) + ' · 영구 보너스 +' + (S.life.sporesEarned*2) + '%</span></h3>' +
-      '<p>스테이지 40+ 도달 시 환생 가능 · 포자 1개당 영구 +2% (자동 적용) · 포자로 아래 유물도 구매!</p></div>' +
+    let html = '<div class="prestigeHead"><h3>🌀 환생 &nbsp;<span style="font-size:11px; color:#8a7a68;">보유 용비늘 ' + fmt(S.spores) + ' · 영구 보너스 +' + (S.life.sporesEarned*2) + '%</span></h3>' +
+      '<p>스테이지 40+ 도달 시 환생 가능 · 용비늘 1개당 영구 +2% (자동 적용) · 용비늘로 아래 유물도 구매!</p></div>' +
       '<button id="prestigeBtn" ' + (can?'':'disabled') + '>' +
-      (can ? '🌀 환생하기 (+' + gain + ' 포자)' : '🔒 스테이지 40 필요 (현재 최고 ' + S.maxStage + ')') + '</button>';
-    html += '<div class="sectionTitle">🏺 유물 상점 (포자 사용)</div>';
+      (can ? '🌀 환생하기 (+' + gain + ' 용비늘)' : '🔒 스테이지 40 필요 (현재 최고 ' + S.maxStage + ')') + '</button>';
+    html += '<div class="sectionTitle">🏺 유물 상점 (용비늘 사용)</div>';
     for (const r of RELICS) {
       html += '<div class="upRow">' +
         '<div class="upIcon">' + r.icon + '</div>' +
         '<div class="upInfo"><div class="upName">' + r.name + ' <span style="color:#c9a25e">Lv.' + S.relics[r.id] + '</span></div>' +
         '<div class="upDesc">' + r.desc + '</div></div>' +
-        '<button class="upBtn purple" data-relic="' + r.id + '">🌀 ' + fmt(relicCost(r)) + '</button></div>';
+        '<button class="upBtn purple" data-relic="' + r.id + '">🧿 ' + fmt(relicCost(r)) + '</button></div>';
     }
     p.innerHTML = html;
     const btn = $('prestigeBtn');
@@ -1800,7 +1800,7 @@ function loadGame() {
       const old = JSON.parse(raw);
       mergeState(old);
       S.dia = 100;
-      S.life.sporesEarned = old.spores || 0;   // 기존 포자 → 영구 보너스 유지
+      S.life.sporesEarned = old.spores || 0;   // 기존 보유분 → 영구 보너스 유지
       S.spores = old.spores || 0;              // + 유물 구매 화폐로도 지급
       S.life.rebirths = old.rebirths || 0;
       S.life.bestStage = old.maxStage || 1;
@@ -1855,7 +1855,7 @@ function offlineEff() {
 function offlineCapSec() {
   return Math.min(24, 12 + 2*S.relics.time) * 3600;
 }
-// 실제 자동사냥 킬 속도 — 스킬·탭·황금버섯 수입 제외 + 데미지 5% 하향 추정(타수 경계 편향 보정)
+// 실제 자동사냥 킬 속도 — 스킬·탭·황금알 수입 제외 + 데미지 5% 하향 추정(타수 경계 편향 보정)
 // → 효율 100%여도 오프라인 보상이 온라인 실수급을 절대 넘지 않음
 function offlineKillRate() {
   const avgDmg = stats.atk * (1 + stats.crit * (stats.critDmg - 1)) * 0.95;
@@ -1872,7 +1872,7 @@ function checkOffline() {
   if (reward <= 0) return;
   const h = Math.floor(capped/3600), m = Math.floor((capped%3600)/60);
   const timeStr = (h>0 ? h+'시간 ' : '') + m + '분';
-  showModal('🎁', '오프라인 보상!', '자리를 비운 동안 버섯이 열심히 싸웠어요!\n\n⏰ ' + timeStr + ' 동안 약 ' + fmt(kills) + '마리 처치\n💰 ' + fmt(reward) + ' 골드 획득!\n\n📈 오프라인 효율 ' + Math.round(eff*100) + '%' +
+  showModal('🎁', '오프라인 보상!', '자리를 비운 동안 용이 열심히 싸웠어요!\n\n⏰ ' + timeStr + ' 동안 약 ' + fmt(kills) + '마리 처치\n💰 ' + fmt(reward) + ' 골드 획득!\n\n📈 오프라인 효율 ' + Math.round(eff*100) + '%' +
     (eff >= 1 ? ' — 온라인 사냥과 동일! 💯' : '\n(⏳ 모래시계 · 🌀 환생 · 🗼 탑으로 100%까지 상승)'), [
     { label:'받기!', cb: ()=>{ S.gold += reward; closeModal(); saveGame(); } }
   ]);
@@ -1958,7 +1958,7 @@ function tick(now) {
       }
     } else farmT = 0;
   }
-  // 황금 버섯 출현
+  // 황금 알 출현
   goldenTimer -= dt;
   if (goldenTimer <= 0) {
     spawnGolden();
@@ -1987,7 +1987,7 @@ function render() {
   const job = S.job ? JOBS.find(j => j.id === S.job) : null;
   $('charInfo').innerHTML = t.emoji + ' Lv.' + S.level + '<small>' + t.name +
     (job ? ' · ' + job.emoji + job.name + S.jobTier : '') +
-    (S.life.sporesEarned>0 ? ' · 🌀+' + (S.life.sporesEarned*2) + '%' : '') + '</small>';
+    (S.life.sporesEarned>0 ? ' · 🧿+' + (S.life.sporesEarned*2) + '%' : '') + '</small>';
 
   if (towerLeft > 0) {
     $('stageLabel').textContent = '🗼 무한의 탑 ' + (S.tower+1) + '층';

@@ -1,5 +1,5 @@
-/* 버섯 키우기 — 서비스워커 (오프라인 캐시) */
-const CACHE = 'mushroom-idle-v9';
+/* 용알 키우기 — 서비스워커 (오프라인 캐시) */
+const CACHE = 'mushroom-idle-v10';
 const ASSETS = [
   './',
   './index.html',
