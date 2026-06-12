@@ -104,8 +104,32 @@
   @keyframes lunge { 0%{transform:translateX(0)} 40%{transform:translateX(26px)} 100%{transform:translateX(0)} }
   .lungeL { animation:lungeL .25s ease-out !important; }
   @keyframes lungeL { 0%{transform:translateX(0) scaleX(-1)} 40%{transform:translateX(-26px) scaleX(-1)} 100%{transform:translateX(0) scaleX(-1)} }
-  .hitFlash { animation:hitFlash .2s; }
-  @keyframes hitFlash { 0%{filter:brightness(3) drop-shadow(0 0 6px #fff)} 100%{filter:brightness(1)} }
+  /* 피격: 번쩍 + 찌그러짐 (squash & stretch) — 몬스터는 좌우반전 유지 위해 음수 스케일 */
+  .hitM { animation:hitM .2s !important; }
+  @keyframes hitM {
+    0%   { transform:scale(-1.22, .78); filter:brightness(3) drop-shadow(0 0 6px #fff); }
+    55%  { transform:scale(-.9, 1.1); }
+    100% { transform:scale(-1, 1); filter:brightness(1); }
+  }
+  .hitP { animation:hitP .2s !important; }
+  @keyframes hitP {
+    0%   { transform:scale(1.22, .78); filter:brightness(3) drop-shadow(0 0 6px #fff); }
+    55%  { transform:scale(.9, 1.1); }
+    100% { transform:scale(1, 1); filter:brightness(1); }
+  }
+  .deathFx {
+    position:absolute; font-size:50px; line-height:1; z-index:4; pointer-events:none;
+    animation:deathPop .45s ease-out forwards;
+  }
+  .deathFx.big { font-size:76px; }
+  @keyframes deathPop {
+    0%   { transform:scaleX(-1) scale(1) translateY(0); opacity:1; filter:brightness(2.5); }
+    100% { transform:scaleX(-1) scale(1.55) translateY(-16px); opacity:0; }
+  }
+  .deco {
+    position:absolute; font-size:23px; opacity:.8; z-index:1; pointer-events:none;
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,.15));
+  }
   .hpbar { width:80px; height:9px; background:rgba(0,0,0,.25); border-radius:5px; margin:5px auto 0; overflow:hidden; border:1px solid rgba(255,255,255,.5); }
   .hpfill { height:100%; background:linear-gradient(#7ee07e,#3cb83c); border-radius:4px; width:100%; transition:width .15s; }
   #monsterHpFill { background:linear-gradient(#ff9a9a,#e53935); }
@@ -429,13 +453,13 @@ const MONSTERS = [
   { emoji:'🕷️', name:'거대 거미' },  { emoji:'🐺', name:'어둠 늑대' },
   { emoji:'🧟', name:'좀비' },        { emoji:'👻', name:'원혼' },
   { emoji:'👺', name:'고블린' },      { emoji:'👹', name:'오우거' },
-  { emoji:'💀', name:'해골 기사' },   { emoji:'🐲', name:'와이번' },
+  { emoji:'💀', name:'해골 기사' },   { emoji:'🐊', name:'늪지 리자드' },
 ];
 const BOSSES = [
   { emoji:'👹', name:'붉은 오우거' }, { emoji:'👿', name:'임프 군주' },
   { emoji:'🧌', name:'트롤 족장' },   { emoji:'👾', name:'심연의 마물' },
   { emoji:'💀', name:'리치 왕' },     { emoji:'😈', name:'대악마' },
-  { emoji:'🐉', name:'타락한 고룡' },
+  { emoji:'👁️', name:'마안의 폭군' },
 ];
 const DUNGEON_MOBS = [
   { emoji:'🪙', name:'골드 슬라임' },
@@ -453,16 +477,17 @@ const JOBS = [
   { id:'mage',    emoji:'🔮', name:'법사', desc:'스킬 피해 +40% · 쿨타임 -6%/차수' },
 ];
 const JOB_LEVELS = [30, 80, 150, 250];   // 차수별 요구 레벨
-const TRIAL_EMOJI = ['🗿','⚜️','🔱','👑'];
-const TOWER_GUARDS = ['🛡️','🗿','⚔️','🦅','🐲','👼','😈','🌋','❄️','🌟'];   // 10층 단위 순환
+const TRIAL_EMOJI = ['🗿','⚜️','🔱','⚖️'];
+const TOWER_GUARDS = ['🛡️','🗿','⚔️','🧌','🐙','👼','😈','🌋','❄️','🧞'];   // 10층 단위 순환
+// ⚠️ 주인공 티어(🥚🦎🦕🦖🐲🐉👑🌟)와 펫 이모지는 적/오브젝트와 절대 중복 금지 (동시 표시 혼동 방지)
 
 const ZONES = [
-  { name:'푸른 초원', sky:'#bde8ff', mid:'#d8f3ff', ground1:'#b8e6a0', ground2:'#8fce75' },
-  { name:'안개 숲',   sky:'#a8d5ba', mid:'#c8e6d0', ground1:'#7cb88a', ground2:'#4e8a5e' },
-  { name:'황금 사막', sky:'#ffe9b0', mid:'#fff3d0', ground1:'#eed28a', ground2:'#d4ab55' },
-  { name:'얼음 설원', sky:'#cfe6ff', mid:'#e8f3ff', ground1:'#e0ecf8', ground2:'#b8cfe8' },
-  { name:'용암 화산', sky:'#ffb199', mid:'#ffd0b8', ground1:'#a86048', ground2:'#7a3b2a' },
-  { name:'어둠의 마계', sky:'#b59ad8', mid:'#cdb8e8', ground1:'#7a5fa0', ground2:'#4a3868' },
+  { name:'푸른 초원', sky:'#bde8ff', mid:'#d8f3ff', ground1:'#b8e6a0', ground2:'#8fce75', deco:['🌳','🌷','🌳'] },
+  { name:'안개 숲',   sky:'#a8d5ba', mid:'#c8e6d0', ground1:'#7cb88a', ground2:'#4e8a5e', deco:['🌲','🍂','🌲'] },
+  { name:'황금 사막', sky:'#ffe9b0', mid:'#fff3d0', ground1:'#eed28a', ground2:'#d4ab55', deco:['🌵','🪨','🌵'] },
+  { name:'얼음 설원', sky:'#cfe6ff', mid:'#e8f3ff', ground1:'#e0ecf8', ground2:'#b8cfe8', deco:['🌲','⛄','🌲'] },
+  { name:'용암 화산', sky:'#ffb199', mid:'#ffd0b8', ground1:'#a86048', ground2:'#7a3b2a', deco:['🌋','🪨','🌋'] },
+  { name:'어둠의 마계', sky:'#b59ad8', mid:'#cdb8e8', ground1:'#7a5fa0', ground2:'#4a3868', deco:['🏰','🪦','🌲'] },
 ];
 
 const UPS = {
@@ -493,8 +518,8 @@ const PETS = [
   { id:'panda',   emoji:'🐼', name:'영물 판다',   r:2, type:'hp',      per:0.08 },
   { id:'unicorn', emoji:'🦄', name:'유니콘',      r:3, type:'atk',     per:0.07 },
   { id:'tiger',   emoji:'🐯', name:'산신 호랑이', r:3, type:'gold',    per:0.10 },
-  { id:'drake',   emoji:'🐲', name:'드레이크',    r:4, type:'atk',     per:0.12 },
-  { id:'goldragon', emoji:'🐉', name:'황금 신룡', r:5, type:'all',     per:0.10 },
+  { id:'drake',   emoji:'🦅', name:'그리핀',      r:4, type:'atk',     per:0.12 },
+  { id:'goldragon', emoji:'🧚', name:'정령왕',    r:5, type:'all',     per:0.10 },
 ];
 const PET_TYPE_LABEL = { gold:'골드', atk:'공격력', hp:'체력', critdmg:'치명피해', all:'전능력' };
 const PET_RARITY_W = [40, 30, 16, 9, 4, 1];
@@ -718,12 +743,25 @@ function recalcStats() {
 
 /* ---------- 존 / 몬스터 ---------- */
 function zoneIndex(st){ return Math.floor((st-1)/20) % ZONES.length; }
+let decoEls = [];
 function applyZone() {
   const zi = zoneIndex(S.stage);
   if (zi === curZone) return;
   curZone = zi;
   const z = ZONES[zi];
   $('app').style.background = 'linear-gradient(' + z.sky + ' 0%, ' + z.mid + ' 45%, ' + z.ground1 + ' 45.5%, ' + z.ground2 + ' 100%)';
+  // 존별 배경 소품 (지평선 근처, 원경 레이어)
+  decoEls.forEach(el => el.remove());
+  decoEls = [];
+  (z.deco || []).forEach((d, i) => {
+    const el = document.createElement('div');
+    el.className = 'deco';
+    el.textContent = d;
+    el.style.left = (6 + i*34 + rnd(0, 14)) + '%';
+    el.style.top = (39 + rnd(0, 3)) + '%';
+    $('battle').appendChild(el);
+    decoEls.push(el);
+  });
 }
 function isBossStage(st){ return st % 10 === 0; }
 function mobHp(st){ return 20 * Math.pow(1.13, st-1); }
@@ -856,7 +894,7 @@ function playerAttack() {
   if (isCrit) sfx('crit');
   const ps = $('playerSprite'), ms = $('monsterSprite');
   ps.classList.remove('lunge'); void ps.offsetWidth; ps.classList.add('lunge');
-  ms.classList.remove('hitFlash'); void ms.offsetWidth; ms.classList.add('hitFlash');
+  ms.classList.remove('hitM'); void ms.offsetWidth; ms.classList.add('hitM');
   if (monster.hp <= 0) onMonsterDeath();
 }
 
@@ -875,7 +913,7 @@ function castSkill(sk) {
   floatText('monsterUnit', label + ' ' + fmt(dmg), 'skillDmg');
   sfx('skill');
   const ms = $('monsterSprite');
-  ms.classList.remove('hitFlash'); void ms.offsetWidth; ms.classList.add('hitFlash');
+  ms.classList.remove('hitM'); void ms.offsetWidth; ms.classList.add('hitM');
   if (monster.hp <= 0) onMonsterDeath();
 }
 
@@ -885,12 +923,25 @@ function monsterAttack() {
   floatText('playerUnit', fmt(dmg), 'dmgTaken');
   const ms = $('monsterSprite'), ps = $('playerSprite');
   ms.classList.remove('lungeL'); void ms.offsetWidth; ms.classList.add('lungeL');
-  ps.classList.remove('hitFlash'); void ps.offsetWidth; ps.classList.add('hitFlash');
+  ps.classList.remove('hitP'); void ps.offsetWidth; ps.classList.add('hitP');
   if (player.hp <= 0) onPlayerDeath();
+}
+
+function deathFx(emoji, big) {
+  const battle = $('battle');
+  const mu = $('monsterUnit');
+  const f = document.createElement('div');
+  f.className = 'deathFx' + (big ? ' big' : '');
+  f.textContent = emoji;
+  f.style.left = (mu.offsetLeft + 20) + 'px';
+  f.style.top = (mu.offsetTop - 5) + 'px';
+  battle.appendChild(f);
+  setTimeout(()=>f.remove(), 500);
 }
 
 function onMonsterDeath() {
   const wasBoss = monster.isBoss;
+  deathFx(monster.emoji, wasBoss || !!monster.isTrial || !!monster.isTower);
   const goldGain = monster.gold * stats.goldMult;
   S.gold += goldGain;
   S.life.kills++;
@@ -1131,7 +1182,7 @@ $('battle').addEventListener('pointerdown', e => {
   battle.appendChild(f);
   setTimeout(()=>f.remove(), 1000);
   const ms = $('monsterSprite');
-  ms.classList.remove('hitFlash'); void ms.offsetWidth; ms.classList.add('hitFlash');
+  ms.classList.remove('hitM'); void ms.offsetWidth; ms.classList.add('hitM');
   if (monster.hp <= 0) onMonsterDeath();
 });
 
@@ -1786,6 +1837,9 @@ function mergeState(data) {
     Object.assign(S.codex.bosses, data.codex.bosses);
     Object.assign(S.codex.rarities, data.codex.rarities);
   }
+  // 이모지 교체 마이그레이션: 구 와이번(🐲)/고룡(🐉) 도감 기록을 새 키로 이전
+  if (S.codex.mobs['🐲']) { delete S.codex.mobs['🐲']; S.codex.mobs['🐊'] = 1; }
+  if (S.codex.bosses['🐉']) { delete S.codex.bosses['🐉']; S.codex.bosses['👁️'] = 1; }
   S.relics = Object.assign({gold:0,atk:0,hp:0,time:0,critdmg:0}, data.relics);
   S.life = Object.assign({kills:0,bossKills:0,pulls:0,sporesEarned:0,rebirths:0,bestStage:1}, data.life);
   S.daily = Object.assign({date:'',counts:{kills:0,pulls:0,ups:0,boss:0},claimed:{}}, data.daily);
