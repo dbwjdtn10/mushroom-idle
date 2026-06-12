@@ -130,6 +130,22 @@
     position:absolute; font-size:23px; opacity:.8; z-index:1; pointer-events:none;
     filter:drop-shadow(0 2px 2px rgba(0,0,0,.15));
   }
+  #battle.punch { animation:punch .15s ease-out; }
+  @keyframes punch { 0%{ transform:scale(1.035); } 100%{ transform:scale(1); } }
+  .burst {
+    position:absolute; font-size:13px; z-index:9; pointer-events:none;
+    animation:burstFly .65s ease-out forwards;
+  }
+  @keyframes burstFly {
+    0%   { transform:translate(0,0) scale(1); opacity:1; }
+    100% { transform:translate(var(--dx), var(--dy)) scale(.55); opacity:0; }
+  }
+  .evolve { animation:evolveFx 1s ease-out !important; }
+  @keyframes evolveFx {
+    0%   { transform:scale(.5) rotate(-14deg); filter:brightness(3.5) drop-shadow(0 0 16px #ffd700); }
+    55%  { transform:scale(1.4) rotate(7deg);  filter:brightness(1.8) drop-shadow(0 0 10px #ffd700); }
+    100% { transform:scale(1); filter:brightness(1); }
+  }
   .hpbar { width:80px; height:9px; background:rgba(0,0,0,.25); border-radius:5px; margin:5px auto 0; overflow:hidden; border:1px solid rgba(255,255,255,.5); }
   .hpfill { height:100%; background:linear-gradient(#7ee07e,#3cb83c); border-radius:4px; width:100%; transition:width .15s; }
   #monsterHpFill { background:linear-gradient(#ff9a9a,#e53935); }
@@ -666,6 +682,7 @@ function sfx(kind) {
     case 'boss':  tone(196, .2, 'sawtooth', .04); tone(165, .25, 'sawtooth', .04, .15); break;
     case 'win':   tone(659, .1); tone(784, .1, 'square', .035, .1); tone(1047, .22, 'square', .04, .2); break;
     case 'dia':   tone(1318, .07, 'sine', .04); break;
+    case 'golden': tone(1047, .07, 'sine', .035); tone(1568, .12, 'sine', .03, .08); break;
     case 'hurt':  tone(180, .08, 'square', .02); break;
   }
 }
@@ -891,7 +908,11 @@ function playerAttack() {
   const dmg = stats.atk * rnd(0.9,1.1) * (isCrit ? stats.critDmg : 1);
   monster.hp -= dmg;
   floatText('monsterUnit', (isCrit?'💥':'') + fmt(dmg), isCrit?'crit':'dmg');
-  if (isCrit) sfx('crit');
+  if (isCrit) {
+    sfx('crit');
+    const bt = $('battle');
+    bt.classList.remove('punch'); void bt.offsetWidth; bt.classList.add('punch');
+  }
   const ps = $('playerSprite'), ms = $('monsterSprite');
   ps.classList.remove('lunge'); void ps.offsetWidth; ps.classList.add('lunge');
   ms.classList.remove('hitM'); void ms.offsetWidth; ms.classList.add('hitM');
@@ -927,6 +948,23 @@ function monsterAttack() {
   if (player.hp <= 0) onPlayerDeath();
 }
 
+function burstFx(unitId, emoji, n, size) {
+  const battle = $('battle');
+  const u = $(unitId);
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement('span');
+    p.className = 'burst';
+    p.textContent = emoji;
+    if (size) p.style.fontSize = size + 'px';
+    p.style.left = (u.offsetLeft + 28 + rnd(-8, 8)) + 'px';
+    p.style.top = (u.offsetTop + 16 + rnd(-6, 6)) + 'px';
+    p.style.setProperty('--dx', rnd(-46, 46) + 'px');
+    p.style.setProperty('--dy', rnd(-58, -6) + 'px');
+    battle.appendChild(p);
+    setTimeout(()=>p.remove(), 700);
+  }
+}
+
 function deathFx(emoji, big) {
   const battle = $('battle');
   const mu = $('monsterUnit');
@@ -942,6 +980,7 @@ function deathFx(emoji, big) {
 function onMonsterDeath() {
   const wasBoss = monster.isBoss;
   deathFx(monster.emoji, wasBoss || !!monster.isTrial || !!monster.isTower);
+  if (monster.gold > 0) burstFx('monsterUnit', '🪙', wasBoss ? 8 : 3);
   const goldGain = monster.gold * stats.goldMult;
   S.gold += goldGain;
   S.life.kills++;
@@ -1214,6 +1253,7 @@ function spawnGolden() {
     saveGame();
   });
   battle.appendChild(el);
+  sfx('golden');
   setTimeout(()=>el.remove(), 7000);
 }
 
@@ -1300,11 +1340,23 @@ function doPulls(n, quiet) {
     }
     if (newTier > oldTier) {
       const t = TIERS[newTier];
-      $('playerSprite').textContent = t.emoji;
-      $('playerName').textContent = t.name;
+      const isHatch = oldTier === 0;
       sfx('level');
-      showModal(t.emoji, '🎉 승급!', S.level + '레벨 달성!\n[' + t.name + '](으)로 진화했습니다!\n전체 능력치가 크게 상승합니다.', [
-        { label:'멋져요!', cb: closeModal }
+      showModal(t.emoji,
+        isHatch ? '🐣 부화!' : '🎉 진화!',
+        S.level + '레벨 달성!\n' + (isHatch
+          ? '알이 깨지고 [' + t.name + '](이)가 태어났습니다!'
+          : '[' + t.name + '](으)로 진화했습니다!') + '\n전체 능력치가 크게 상승합니다.', [
+        { label: isHatch ? '🐣 부화!' : '✨ 진화!', cb: ()=>{
+            closeModal();
+            $('playerSprite').textContent = t.emoji;
+            $('playerName').textContent = t.name;
+            const ps = $('playerSprite');
+            ps.classList.remove('evolve'); void ps.offsetWidth; ps.classList.add('evolve');
+            burstFx('playerUnit', '✨', 9, 16);
+            flashFx();
+            sfx('epic');
+          } }
       ]);
     } else {
       sfx('level');

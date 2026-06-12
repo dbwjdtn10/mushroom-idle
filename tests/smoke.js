@@ -5,7 +5,7 @@ const fs = require('fs');
 function makeEl(id) {
   const el = {
     id: id || '',
-    style: {},
+    style: { setProperty(k, v){ this[k] = v; } },
     classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; } },
     textContent: '',
     dataset: {},

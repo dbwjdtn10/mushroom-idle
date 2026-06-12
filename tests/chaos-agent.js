@@ -5,7 +5,7 @@ const fs = require('fs');
 
 function makeEl(id) {
   const el = {
-    id: id || '', style: {},
+    id: id || '', style: { setProperty(k, v){ this[k] = v; } },
     classList: {
       _set: new Set(),
       add(c){ this._set.add(c); }, remove(c){ this._set.delete(c); },

@@ -4,7 +4,7 @@ const fs = require('fs');
 
 function makeEl(id) {
   return {
-    id: id || '', style: {},
+    id: id || '', style: { setProperty(k, v){ this[k] = v; } },
     classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; } },
     textContent: '', innerHTML: '', dataset: {}, children: [], _handlers: {},
     offsetLeft: 0, offsetTop: 0, offsetWidth: 0,
