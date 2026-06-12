@@ -1,0 +1,17 @@
+{
+  "name": "버섯 키우기",
+  "short_name": "버섯키우기",
+  "description": "램프를 문질러 장비를 모으고 버섯을 키우는 방치형 RPG",
+  "lang": "ko",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#2b2438",
+  "background_color": "#2b2438",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,2073 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2b2438">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="버섯 키우기">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>🍄 버섯 키우기</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; }
+  body {
+    font-family:'Segoe UI', 'Malgun Gothic', sans-serif;
+    background:#2b2438;
+    display:flex; justify-content:center;
+    overflow:hidden;
+    user-select:none; -webkit-user-select:none;
+  }
+  #app {
+    width:100%; max-width:480px; height:100%;
+    display:flex; flex-direction:column;
+    background:linear-gradient(#bde8ff 0%, #d8f3ff 45%, #b8e6a0 45.5%, #8fce75 100%);
+    position:relative; overflow:hidden;
+    transition:background 1s;
+    box-shadow:0 0 48px rgba(0,0,0,.5);
+  }
+  button { font-family:inherit; transition:filter .15s; }
+  button:not(:disabled):hover { filter:brightness(1.06); }
+  #flashFx {
+    position:absolute; inset:0; pointer-events:none; z-index:15; opacity:0;
+    background:radial-gradient(circle, rgba(255,250,200,.8) 0%, rgba(255,250,200,0) 70%);
+  }
+  #flashFx.on { animation:flashFx .6s ease-out; }
+  @keyframes flashFx { 0%{ opacity:1; } 100%{ opacity:0; } }
+  @keyframes shakeX {
+    0%,100%{ transform:translateX(0); } 20%{ transform:translateX(-7px); }
+    40%{ transform:translateX(7px); } 60%{ transform:translateX(-4px); } 80%{ transform:translateX(4px); }
+  }
+  #battle.shake { animation:shakeX .45s; }
+
+  /* ===== 상단 바 ===== */
+  #topbar {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:7px 10px; background:rgba(255,255,255,.78);
+    backdrop-filter:blur(4px); z-index:5;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+  }
+  .resource {
+    display:flex; align-items:center; gap:3px; font-weight:700; font-size:12.5px; color:#5a4a3a;
+    background:rgba(120,95,60,.1); padding:3px 9px; border-radius:11px;
+  }
+  #charInfo { font-size:12.5px; font-weight:700; color:#7a5c3e; line-height:1.25; }
+  #charInfo small { display:block; font-weight:600; color:#a08868; font-size:10.5px; }
+
+  /* ===== 전투 영역 ===== */
+  #battle { flex:1; position:relative; min-height:190px; }
+  #stageLabel {
+    position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    background:rgba(90,74,58,.85); color:#fff; padding:4px 16px;
+    border-radius:14px; font-size:12.5px; font-weight:700; white-space:nowrap; z-index:3;
+  }
+  #killBar {
+    position:absolute; top:36px; left:50%; transform:translateX(-50%);
+    width:140px; height:8px; background:rgba(255,255,255,.6); border-radius:4px; overflow:hidden; z-index:3;
+  }
+  #killFill { height:100%; width:0%; background:#ffb84d; border-radius:4px; transition:width .2s; }
+  #bossTimer {
+    position:absolute; top:50px; left:50%; transform:translateX(-50%);
+    font-size:15px; font-weight:800; color:#e53935; display:none; z-index:3;
+    text-shadow:0 1px 2px #fff;
+  }
+  #bossTimer.urgent { animation:pulseRed .5s infinite; }
+  @keyframes pulseRed {
+    0%,100%{ transform:translateX(-50%) scale(1); }
+    50%{ transform:translateX(-50%) scale(1.18); }
+  }
+  .unit { position:absolute; bottom:16%; text-align:center; width:90px; z-index:2; }
+  #playerUnit { left:12%; }
+  #monsterUnit { right:12%; }
+  .sprite { font-size:50px; line-height:1; display:inline-block; filter:drop-shadow(0 4px 3px rgba(0,0,0,.2)); }
+  #playerSprite { animation:bounce 1.2s ease-in-out infinite; }
+  #monsterSprite { animation:bounceM 1.5s ease-in-out infinite; transform:scaleX(-1); }
+  @keyframes bounce { 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-7px); } }
+  @keyframes bounceM { 0%,100%{ transform:translateY(0) scaleX(-1); } 50%{ transform:translateY(-7px) scaleX(-1); } }
+  #monsterSprite.boss { font-size:76px; }
+  #petSprite {
+    position:absolute; top:-14px; left:-12px; font-size:22px; z-index:2;
+    animation:bounce 1s ease-in-out infinite; display:none;
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,.2));
+  }
+  .lunge { animation:lunge .25s ease-out !important; }
+  @keyframes lunge { 0%{transform:translateX(0)} 40%{transform:translateX(26px)} 100%{transform:translateX(0)} }
+  .lungeL { animation:lungeL .25s ease-out !important; }
+  @keyframes lungeL { 0%{transform:translateX(0) scaleX(-1)} 40%{transform:translateX(-26px) scaleX(-1)} 100%{transform:translateX(0) scaleX(-1)} }
+  .hitFlash { animation:hitFlash .2s; }
+  @keyframes hitFlash { 0%{filter:brightness(3) drop-shadow(0 0 6px #fff)} 100%{filter:brightness(1)} }
+  .hpbar { width:80px; height:9px; background:rgba(0,0,0,.25); border-radius:5px; margin:5px auto 0; overflow:hidden; border:1px solid rgba(255,255,255,.5); }
+  .hpfill { height:100%; background:linear-gradient(#7ee07e,#3cb83c); border-radius:4px; width:100%; transition:width .15s; }
+  #monsterHpFill { background:linear-gradient(#ff9a9a,#e53935); }
+  .unitname { font-size:11px; font-weight:700; color:#4a3a2a; margin-top:3px; text-shadow:0 1px 0 rgba(255,255,255,.6); }
+  .floater {
+    position:absolute; font-weight:800; font-size:17px; pointer-events:none; z-index:10;
+    animation:floatUp 1s ease-out forwards; text-shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+  @keyframes floatUp { 0%{opacity:1; transform:translateY(0) scale(1)} 100%{opacity:0; transform:translateY(-55px) scale(1.1)} }
+  .dmg { color:#fff; }
+  .crit { color:#ffd324; font-size:23px; }
+  .skillDmg { color:#7be4ff; font-size:21px; }
+  .dmgTaken { color:#ff6b6b; }
+  .goldFloat { color:#ffc107; font-size:14px; }
+  .diaFloat { color:#40c4ff; font-size:15px; }
+  #retryBossBtn {
+    position:absolute; top:66px; left:50%; transform:translateX(-50%);
+    background:#e53935; color:#fff; border:none; padding:8px 18px; border-radius:18px;
+    font-weight:800; font-size:14px; display:none; z-index:4; box-shadow:0 3px 0 #a02824;
+  }
+  #skillBar {
+    position:absolute; bottom:6px; left:50%; transform:translateX(-50%);
+    display:flex; gap:7px; z-index:3;
+  }
+  .skillChip {
+    width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.85);
+    display:flex; align-items:center; justify-content:center; font-size:17px;
+    position:relative; overflow:hidden; border:2px solid rgba(120,95,60,.4);
+  }
+  .skillChip .cdOverlay {
+    position:absolute; left:0; bottom:0; width:100%; height:0%;
+    background:rgba(40,30,20,.5); pointer-events:none;
+  }
+  .skillChip.locked { opacity:.45; }
+  .cloud { position:absolute; font-size:34px; opacity:.8; z-index:1; animation:drift linear infinite; }
+  @keyframes drift { from{ transform:translateX(-60px);} to{ transform:translateX(540px);} }
+  .golden {
+    position:absolute; font-size:38px; z-index:8; cursor:pointer; line-height:1;
+    filter:sepia(1) saturate(3) hue-rotate(-15deg) brightness(1.2) drop-shadow(0 0 10px #ffd700);
+    animation:goldenPop .35s ease-out, bounce .8s ease-in-out .35s infinite;
+  }
+  @keyframes goldenPop { from{ transform:scale(0) rotate(-30deg); } to{ transform:scale(1) rotate(0); } }
+
+  /* ===== 램프 ===== */
+  #lampArea {
+    padding:7px 12px 5px; background:rgba(255,255,255,.85); z-index:5;
+    border-top:2px solid rgba(160,130,90,.25);
+  }
+  #lvProgressWrap { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:11px; color:#8a7458; font-weight:700; }
+  #lvProgress { flex:1; height:6px; background:#eee2d0; border-radius:3px; overflow:hidden; }
+  #lvProgressFill { height:100%; background:#b388ff; width:0%; transition:width .2s; }
+  #lampBtns { display:flex; gap:8px; }
+  .lampBtn {
+    flex:1; border:none; border-radius:13px; padding:10px 6px;
+    font-size:14px; font-weight:800; color:#6b4f1d; cursor:pointer;
+    background:linear-gradient(#ffe082,#ffc94d); box-shadow:0 4px 0 #d9a02e;
+    transition:transform .05s;
+  }
+  .lampBtn:active { transform:translateY(3px); box-shadow:0 1px 0 #d9a02e; }
+  .lampBtn:disabled { filter:grayscale(.8); opacity:.6; box-shadow:0 4px 0 #999; }
+  .lampBtn small { display:block; font-size:11px; font-weight:700; color:#8a6a2a; }
+  #autoPullBtn { flex:0 0 66px; }
+  #autoPullBtn.autoOn { background:linear-gradient(#aed581,#7cb342); box-shadow:0 4px 0 #558b2f; color:#fff; }
+  #autoPullBtn.autoOn small { color:#e8f5d8; }
+
+  /* ===== 탭 ===== */
+  #tabs { display:flex; background:#fff; z-index:5; }
+  .tabBtn {
+    flex:1; padding:8px 0; border:none; background:#f1e9dc; color:#a08868;
+    font-size:11.5px; font-weight:800; cursor:pointer; border-top:2px solid #e0d4c0;
+    position:relative;
+  }
+  .tabBtn.active { background:#fff; color:#7a5c3e; border-top:2px solid #ffb84d; }
+  .tabBtn .dot {
+    position:absolute; top:4px; right:8px; width:8px; height:8px; border-radius:50%;
+    background:#e53935; display:none;
+  }
+  #panel { height:190px; overflow-y:auto; background:#fff; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); z-index:5; }
+  #panel::-webkit-scrollbar { width:4px; }
+  #panel::-webkit-scrollbar-thumb { background:#dccdb4; border-radius:2px; }
+
+  /* 강화/스킬 패널 */
+  .upRow { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f0e8da; }
+  .upIcon { font-size:23px; width:30px; text-align:center; }
+  .upInfo { flex:1; min-width:0; }
+  .upName { font-size:12.5px; font-weight:800; color:#5a4a3a; }
+  .upDesc { font-size:10.5px; color:#a09078; }
+  .upBtn {
+    border:none; background:linear-gradient(#9ee37d,#6cc24a); color:#fff;
+    padding:7px 8px; border-radius:10px; font-size:11.5px; font-weight:800;
+    min-width:84px; cursor:pointer; box-shadow:0 3px 0 #4e9434;
+  }
+  .upBtn:active { transform:translateY(2px); box-shadow:0 1px 0 #4e9434; }
+  .upBtn:disabled { filter:grayscale(.9); opacity:.55; box-shadow:0 3px 0 #888; }
+  .upBtn.dia { background:linear-gradient(#81d4fa,#29b6f6); box-shadow:0 3px 0 #1976a8; }
+  .upBtn.purple { background:linear-gradient(#ce93d8,#9c27b0); box-shadow:0 3px 0 #6a1b7a; }
+
+  /* 장비/펫 패널 */
+  #equipGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+  .eqCard {
+    border:2px solid #ddd; border-radius:12px; padding:5px 3px; text-align:center;
+    background:#faf7f2; min-height:70px;
+  }
+  .eqIcon { font-size:22px; }
+  .eqName { font-size:9.5px; font-weight:800; margin-top:1px; }
+  .eqStat { font-size:9.5px; color:#7a6a55; font-weight:700; }
+  .enhBtn {
+    border:none; width:100%; margin-top:3px; border-radius:8px; padding:4px 2px;
+    font-size:9px; font-weight:800; color:#fff; cursor:pointer;
+    background:linear-gradient(#ffcc80,#ff9800); box-shadow:0 2px 0 #c66900;
+  }
+  .enhBtn:active { transform:translateY(1px); box-shadow:0 1px 0 #c66900; }
+  #statSummary { margin-top:8px; font-size:11.5px; color:#5a4a3a; font-weight:700; text-align:center; line-height:1.6; }
+  #petGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:8px; }
+  .petCard {
+    border:2px solid #ddd; border-radius:12px; padding:5px 2px; text-align:center;
+    background:#faf7f2; min-height:62px;
+  }
+  .petIcon { font-size:22px; }
+  .petName { font-size:9px; font-weight:800; }
+  .petStat { font-size:8.5px; color:#7a6a55; font-weight:700; }
+  .petStarRow { font-size:8px; color:#ffb300; letter-spacing:1px; min-height:10px; }
+  .petEvoBtn {
+    border:none; width:100%; margin-top:2px; border-radius:7px; padding:3px 1px;
+    font-size:8px; font-weight:800; color:#fff; cursor:pointer;
+    background:linear-gradient(#81d4fa,#29b6f6); box-shadow:0 2px 0 #1976a8;
+  }
+  .petEvoBtn:disabled { filter:grayscale(.8); opacity:.55; box-shadow:0 2px 0 #999; }
+  .codexGrid { display:grid; grid-template-columns:repeat(8,1fr); gap:4px; font-size:19px; text-align:center; padding:4px 0; }
+  .codexGrid .undisc { filter:brightness(0); opacity:.22; }
+  .petBtns { display:flex; gap:8px; }
+  .petPullBtn {
+    flex:1; border:none; border-radius:12px; padding:9px 4px;
+    font-size:12.5px; font-weight:800; color:#fff; cursor:pointer;
+    background:linear-gradient(#81d4fa,#29b6f6); box-shadow:0 3px 0 #1976a8;
+  }
+  .petPullBtn:active { transform:translateY(2px); box-shadow:0 1px 0 #1976a8; }
+  .petPullBtn:disabled { filter:grayscale(.8); opacity:.6; box-shadow:0 3px 0 #888; }
+
+  /* 환생 패널 */
+  .prestigeHead { text-align:center; margin-bottom:6px; }
+  .prestigeHead h3 { color:#7b1fa2; font-size:14px; }
+  .prestigeHead p { font-size:11px; color:#8a7a68; line-height:1.5; }
+  #prestigeBtn {
+    border:none; background:linear-gradient(#ce93d8,#9c27b0); color:#fff;
+    padding:9px 20px; border-radius:13px; font-size:13px; font-weight:800; cursor:pointer;
+    box-shadow:0 4px 0 #6a1b7a; margin:6px auto; display:block;
+  }
+  #prestigeBtn:active { transform:translateY(2px); box-shadow:0 2px 0 #6a1b7a; }
+  #prestigeBtn:disabled { filter:grayscale(.8); opacity:.6; box-shadow:0 4px 0 #888; }
+
+  /* 더보기 패널 */
+  .sectionTitle { font-size:12px; font-weight:800; color:#7a5c3e; margin:8px 0 4px; border-bottom:2px solid #f0e0c8; padding-bottom:3px; }
+  .sectionTitle:first-child { margin-top:0; }
+  .questRow { display:flex; align-items:center; gap:6px; padding:5px 0; border-bottom:1px solid #f5efe5; }
+  .questInfo { flex:1; min-width:0; }
+  .questName { font-size:11.5px; font-weight:700; color:#5a4a3a; }
+  .questProg { font-size:10px; color:#a09078; font-weight:700; }
+  .claimBtn {
+    border:none; background:linear-gradient(#ffd54f,#ffb300); color:#6b4f1d;
+    padding:6px 10px; border-radius:9px; font-size:11px; font-weight:800;
+    min-width:70px; cursor:pointer; box-shadow:0 2px 0 #c98e00;
+  }
+  .claimBtn:disabled { filter:grayscale(.85); opacity:.55; box-shadow:0 2px 0 #999; }
+  .settingBtn {
+    border:none; background:#efe7da; color:#7a5c3e; padding:8px 12px; border-radius:10px;
+    font-size:11.5px; font-weight:800; cursor:pointer; margin:3px 3px 3px 0;
+  }
+  .settingBtn.danger { background:#ffd6d6; color:#c62828; }
+
+  /* 토스트 / 모달 */
+  #toast {
+    position:absolute; bottom:255px; left:50%; transform:translateX(-50%);
+    background:rgba(60,45,30,.9); color:#fff; padding:8px 18px; border-radius:18px;
+    font-size:12.5px; font-weight:700; opacity:0; transition:opacity .3s; z-index:20;
+    pointer-events:none; white-space:nowrap; max-width:92%;
+  }
+  #modalOverlay {
+    position:absolute; inset:0; background:rgba(0,0,0,.5); z-index:30;
+    display:none; align-items:center; justify-content:center;
+  }
+  #modal {
+    background:#fffaf0; border-radius:20px; padding:22px 20px; width:84%; max-width:340px;
+    text-align:center; box-shadow:0 10px 40px rgba(0,0,0,.35);
+  }
+  #modalEmoji { font-size:50px; }
+  #modalTitle { font-size:17px; font-weight:800; color:#5a4a3a; margin:8px 0 6px; }
+  #modalBody { font-size:12.5px; color:#8a7a68; line-height:1.6; white-space:pre-line; }
+  .modalBtns { display:flex; gap:8px; margin-top:14px; justify-content:center; flex-wrap:wrap; }
+  .modalBtn {
+    border:none; padding:10px 22px; border-radius:12px; font-size:13px; font-weight:800; cursor:pointer;
+    background:linear-gradient(#ffd54f,#ffb300); color:#6b4f1d; box-shadow:0 3px 0 #c98e00;
+  }
+  .modalBtn.gray { background:#e0e0e0; color:#777; box-shadow:0 3px 0 #aaa; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div id="charInfo">🍄 Lv.1<small>아기 버섯</small></div>
+    <div style="display:flex; gap:9px;">
+      <div class="resource">💰 <span id="goldText">0</span></div>
+      <div class="resource">💎 <span id="diaText">0</span></div>
+      <div class="resource">🌀 <span id="sporeText">0</span></div>
+    </div>
+  </div>
+
+  <div id="battle">
+    <div id="stageLabel">스테이지 1</div>
+    <div id="killBar"><div id="killFill"></div></div>
+    <div id="bossTimer">⏱ 30.0</div>
+    <button id="retryBossBtn">👹 보스 재도전</button>
+    <div class="unit" id="playerUnit">
+      <span id="petSprite">🐭</span>
+      <span class="sprite" id="playerSprite">🍄</span>
+      <div class="hpbar"><div class="hpfill" id="playerHpFill"></div></div>
+      <div class="unitname" id="playerName">아기 버섯</div>
+    </div>
+    <div class="unit" id="monsterUnit">
+      <span class="sprite" id="monsterSprite">🐌</span>
+      <div class="hpbar"><div class="hpfill" id="monsterHpFill"></div></div>
+      <div class="unitname" id="monsterName">달팽이</div>
+    </div>
+    <div id="skillBar"></div>
+  </div>
+
+  <div id="lampArea">
+    <div id="lvProgressWrap">
+      <span>다음 레벨</span>
+      <div id="lvProgress"><div id="lvProgressFill"></div></div>
+      <span id="lvProgressText">0/3</span>
+    </div>
+    <div id="lampBtns">
+      <button class="lampBtn" id="pull1Btn">🪔 램프 문지르기<small id="pull1Cost">💰 40</small></button>
+      <button class="lampBtn" id="pull10Btn">🪔 ×10<small id="pull10Cost">💰 400</small></button>
+      <button class="lampBtn" id="autoPullBtn">▶ 자동<small id="autoPullState">OFF</small></button>
+    </div>
+  </div>
+
+  <div id="tabs">
+    <button class="tabBtn active" data-tab="upgrade">⚔️ 강화</button>
+    <button class="tabBtn" data-tab="skill">✨ 스킬</button>
+    <button class="tabBtn" data-tab="equip">🎒 장비</button>
+    <button class="tabBtn" data-tab="pet">🐾 펫</button>
+    <button class="tabBtn" data-tab="prestige">🌀 환생</button>
+    <button class="tabBtn" data-tab="more">📋 메뉴<span class="dot" id="moreDot"></span></button>
+  </div>
+  <div id="panel"></div>
+
+  <div id="flashFx"></div>
+  <div id="toast"></div>
+  <div id="modalOverlay">
+    <div id="modal">
+      <div id="modalEmoji">🎁</div>
+      <div id="modalTitle"></div>
+      <div id="modalBody"></div>
+      <div class="modalBtns" id="modalBtns"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================
+   🍄 버섯 키우기 v4 — 모바일 방치형 RPG
+   스킬 · 펫 · 다이아 · 퀘스트 · 업적 · 유물 · 존 · 사운드
+   v3: 장비 강화 · 골드 던전 · 환생 시작 골드
+   v4: 탭 공격 · 황금 버섯 · 펫 성급 진화 · 다이아 던전 · 도감 · 자동화
+   v5: 전직 시스템 (검사/궁수/법사 · 1~4차 시험) · 전투력
+   v6: 무한의 탑 (층별 연속 등반 · 첫 클리어 보상)
+   v7: 스킬 각성 (고유 효과) · 장비 세트 효과
+   ========================================================= */
+
+const SAVE_KEY = 'mushroomIdleSave_v2';
+const OLD_SAVE_KEY = 'mushroomIdleSave_v1';
+const KILLS_PER_STAGE = 10;
+const BOSS_TIME = 30;
+const DUNGEON_TIME = 45;
+const DUNGEON_DAILY = 2;
+const DIA_DUNGEON_TIME = 30;
+const DIA_DUNGEON_DAILY = 1;
+const TRIAL_TIME = 30;
+const TOWER_TIME = 30;
+const PULLS_PER_LEVEL = 3;
+
+const SLOTS = [
+  { key:'weapon', name:'무기',   icon:'⚔️', type:'atk' },
+  { key:'helmet', name:'투구',   icon:'🪖', type:'hp'  },
+  { key:'armor',  name:'갑옷',   icon:'🛡️', type:'hp'  },
+  { key:'gloves', name:'장갑',   icon:'🧤', type:'atk' },
+  { key:'boots',  name:'신발',   icon:'👢', type:'hp'  },
+  { key:'ring',   name:'반지',   icon:'💍', type:'atk' },
+];
+
+const RARITIES = [
+  { name:'일반', color:'#9e9e9e', mult:1,   w:45 },
+  { name:'고급', color:'#4caf50', mult:1.7, w:27 },
+  { name:'희귀', color:'#2196f3', mult:2.8, w:15 },
+  { name:'영웅', color:'#9c27b0', mult:4.6, w:8  },
+  { name:'전설', color:'#ff9800', mult:7.5, w:4  },
+  { name:'신화', color:'#f44336', mult:12,  w:1  },
+];
+
+const TIERS = [
+  { lv:1,   emoji:'🍄', name:'아기 버섯' },
+  { lv:10,  emoji:'🌱', name:'새싹 모험가' },
+  { lv:25,  emoji:'🗡️', name:'견습 검사' },
+  { lv:50,  emoji:'⚔️', name:'정예 기사' },
+  { lv:90,  emoji:'🛡️', name:'로얄 가드' },
+  { lv:140, emoji:'🧙', name:'대마법사' },
+  { lv:200, emoji:'🦸', name:'버섯 영웅' },
+  { lv:280, emoji:'🌟', name:'전설의 버섯신' },
+];
+
+const MONSTERS = [
+  { emoji:'🐌', name:'달팽이' },   { emoji:'🐛', name:'애벌레' },
+  { emoji:'🐸', name:'개구리' },   { emoji:'🐀', name:'들쥐' },
+  { emoji:'🦗', name:'메뚜기' },   { emoji:'🦂', name:'전갈' },
+  { emoji:'🦇', name:'박쥐' },     { emoji:'🐍', name:'독사' },
+  { emoji:'🕷️', name:'거미' },    { emoji:'🐺', name:'늑대' },
+  { emoji:'🧟', name:'좀비' },     { emoji:'👻', name:'유령' },
+  { emoji:'👺', name:'고블린' },   { emoji:'👹', name:'오우거' },
+  { emoji:'💀', name:'해골 기사' },{ emoji:'🐲', name:'와이번' },
+];
+const BOSSES = [
+  { emoji:'👹', name:'붉은 오우거' }, { emoji:'👿', name:'임프 군주' },
+  { emoji:'🧌', name:'트롤 족장' },   { emoji:'👾', name:'심연의 마물' },
+  { emoji:'💀', name:'리치 왕' },     { emoji:'😈', name:'대악마' },
+  { emoji:'🐉', name:'고대 용' },
+];
+const DUNGEON_MOBS = [
+  { emoji:'🪙', name:'골드 슬라임' },
+  { emoji:'💰', name:'돈주머니 도깨비' },
+  { emoji:'👛', name:'지갑 정령' },
+];
+const DIA_DUNGEON_MOBS = [
+  { emoji:'💠', name:'수정 골렘' },
+  { emoji:'🔮', name:'마력 결정' },
+];
+
+const JOBS = [
+  { id:'warrior', emoji:'⚔️', name:'검사', desc:'공격력 +25%/차수' },
+  { id:'archer',  emoji:'🏹', name:'궁수', desc:'공격속도 +8% · 치명타 +4%p/차수' },
+  { id:'mage',    emoji:'🔮', name:'법사', desc:'스킬 피해 +40% · 쿨타임 -6%/차수' },
+];
+const JOB_LEVELS = [30, 80, 150, 250];   // 차수별 요구 레벨
+const TRIAL_EMOJI = ['🗿','⚜️','🔱','👑'];
+const TOWER_GUARDS = ['🛡️','🗿','⚔️','🦅','🐲','👼','😈','🌋','❄️','🌟'];   // 10층 단위 순환
+
+const ZONES = [
+  { name:'푸른 초원', sky:'#bde8ff', mid:'#d8f3ff', ground1:'#b8e6a0', ground2:'#8fce75' },
+  { name:'안개 숲',   sky:'#a8d5ba', mid:'#c8e6d0', ground1:'#7cb88a', ground2:'#4e8a5e' },
+  { name:'황금 사막', sky:'#ffe9b0', mid:'#fff3d0', ground1:'#eed28a', ground2:'#d4ab55' },
+  { name:'얼음 설원', sky:'#cfe6ff', mid:'#e8f3ff', ground1:'#e0ecf8', ground2:'#b8cfe8' },
+  { name:'용암 화산', sky:'#ffb199', mid:'#ffd0b8', ground1:'#a86048', ground2:'#7a3b2a' },
+  { name:'어둠의 마계', sky:'#b59ad8', mid:'#cdb8e8', ground1:'#7a5fa0', ground2:'#4a3868' },
+];
+
+const UPS = {
+  atk:  { name:'공격력 수련', icon:'⚔️', desc:'공격력 +8%',     base:25,  growth:1.22, max:Infinity },
+  hp:   { name:'체력 수련',   icon:'❤️', desc:'체력 +8%',        base:25,  growth:1.22, max:Infinity },
+  spd:  { name:'공격 속도',   icon:'⚡', desc:'공격 속도 +5%',   base:150, growth:1.5,  max:30 },
+  crit: { name:'치명타 연마', icon:'💥', desc:'치명타 확률 +1%', base:150, growth:1.5,  max:45 },
+};
+
+const SKILLS = [
+  { id:'fire',    emoji:'🔥', name:'파이어볼',   unlock:15,  cd:5,  base:3,  per:0.5, cost0:500,    growth:1.35, awkCost:200,  awkDesc:'화상 — 적중 시 3초간 도트 피해' },
+  { id:'bolt',    emoji:'⚡', name:'썬더볼트',   unlock:40,  cd:8,  base:6,  per:1,   cost0:5000,   growth:1.35, awkCost:400,  awkDesc:'과부하 — 30% 확률로 피해 2배' },
+  { id:'tornado', emoji:'🌪️', name:'대회오리',  unlock:80,  cd:12, base:12, per:2,   cost0:80000,  growth:1.35, awkCost:800,  awkDesc:'질풍 — 시전 후 3초간 공격속도 +30%' },
+  { id:'meteor',  emoji:'☄️', name:'메테오',     unlock:150, cd:20, base:25, per:4,   cost0:2e6,    growth:1.35, awkCost:1500, awkDesc:'멸망 — 피해 +80%' },
+];
+const AWAKEN_REQ = 10;   // 각성 요구 스킬 레벨 (표시 기준)
+const SET_BONUS = [0, 0.05, 0.12, 0.25, 0.45, 0.8];   // 전 부위 최소 등급별 세트 보너스
+
+const PETS = [
+  { id:'mouse',   emoji:'🐭', name:'생쥐',   r:0, type:'gold',    per:0.02 },
+  { id:'chick',   emoji:'🐤', name:'병아리', r:0, type:'atk',     per:0.01 },
+  { id:'turtle',  emoji:'🐢', name:'거북이', r:0, type:'hp',      per:0.02 },
+  { id:'dog',     emoji:'🐶', name:'강아지', r:1, type:'atk',     per:0.02 },
+  { id:'cat',     emoji:'🐱', name:'고양이', r:1, type:'gold',    per:0.04 },
+  { id:'rabbit',  emoji:'🐰', name:'토끼',   r:1, type:'hp',      per:0.04 },
+  { id:'fox',     emoji:'🦊', name:'여우',   r:2, type:'atk',     per:0.04 },
+  { id:'owl',     emoji:'🦉', name:'부엉이', r:2, type:'critdmg', per:0.05 },
+  { id:'panda',   emoji:'🐼', name:'판다',   r:2, type:'hp',      per:0.08 },
+  { id:'unicorn', emoji:'🦄', name:'유니콘', r:3, type:'atk',     per:0.07 },
+  { id:'tiger',   emoji:'🐯', name:'호랑이', r:3, type:'gold',    per:0.10 },
+  { id:'drake',   emoji:'🐲', name:'새끼용', r:4, type:'atk',     per:0.12 },
+  { id:'goldragon', emoji:'🐉', name:'황금용', r:5, type:'all',   per:0.10 },
+];
+const PET_TYPE_LABEL = { gold:'골드', atk:'공격력', hp:'체력', critdmg:'치명피해', all:'전능력' };
+const PET_RARITY_W = [40, 30, 16, 9, 4, 1];
+const PET_COST = 100;
+
+const RELICS = [
+  { id:'gold',    icon:'💰', name:'황금 곡괭이', desc:'골드 획득 +10%',      base:5,  growth:1.6 },
+  { id:'atk',     icon:'🗡️', name:'고대 검',     desc:'공격력 +5%',          base:8,  growth:1.6 },
+  { id:'hp',      icon:'🛡️', name:'수호 부적',   desc:'체력 +5%',            base:8,  growth:1.6 },
+  { id:'time',    icon:'⏳', name:'모래시계',    desc:'오프라인 효율 +5%p · 캡 +2시간',  base:5,  growth:1.6 },
+  { id:'critdmg', icon:'🎯', name:'명중의 눈',   desc:'치명타 피해 +10%p',   base:10, growth:1.6 },
+];
+
+const QUESTS = [
+  { id:'kills', name:'몬스터 200마리 처치', target:200, reward:30 },
+  { id:'pulls', name:'램프 30회 문지르기',  target:30,  reward:30 },
+  { id:'ups',   name:'수련 10회 강화',      target:10,  reward:20 },
+  { id:'boss',  name:'보스 1회 처치',       target:1,   reward:40 },
+  { id:'dungeon', name:'골드 던전 1회 입장', target:1,  reward:25 },
+  { id:'tower',   name:'무한의 탑 1층 등반', target:1,  reward:20 },
+];
+
+const ACHS = [
+  { id:'kills',   name:'학살자',     desc:'누적 처치',     tiers:[100,1000,10000,100000], rewards:[20,50,150,500],  stat:()=>S.life.kills },
+  { id:'stage',   name:'개척자',     desc:'최고 스테이지', tiers:[20,50,100,200],         rewards:[30,80,200,600],  stat:()=>S.life.bestStage },
+  { id:'pulls',   name:'램프의 친구',desc:'누적 램프',     tiers:[50,300,1000,5000],      rewards:[20,60,150,400],  stat:()=>S.life.pulls },
+  { id:'rebirth', name:'윤회자',     desc:'환생 횟수',     tiers:[1,3,10,25],             rewards:[100,200,500,1000], stat:()=>S.life.rebirths },
+  { id:'pets',    name:'펫 수집가',  desc:'보유 펫 종류',  tiers:[1,5,9,13],              rewards:[30,80,200,500],  stat:()=>Object.keys(S.pets).length },
+  { id:'enh',     name:'대장장이',   desc:'장비 강화 합계', tiers:[10,40,120,300],         rewards:[30,80,200,500],  stat:()=>Object.values(S.enhance).reduce((a,b)=>a+b,0) },
+  { id:'job',     name:'전직의 길',  desc:'전직 차수',     tiers:[1,2,3,4],               rewards:[50,100,200,400], stat:()=>S.jobTier },
+  { id:'tower',   name:'탑 등반가',  desc:'무한의 탑 층수', tiers:[10,30,60,100],          rewards:[40,100,250,600], stat:()=>S.tower },
+];
+
+/* ---------- 상태 ---------- */
+function defaultState() {
+  return {
+    gold: 60,
+    dia: 100,
+    stage: 1,
+    maxStage: 1,
+    kills: 0,
+    pulls: 0,
+    level: 1,
+    job: null,
+    jobTier: 0,
+    tower: 0,                 // 최고 클리어 층
+    upgrades: { atk:0, hp:0, spd:0, crit:0 },
+    equip: { weapon:null, helmet:null, armor:null, gloves:null, boots:null, ring:null },
+    enhance: { weapon:0, helmet:0, armor:0, gloves:0, boots:0, ring:0 },
+    skills: { fire:0, bolt:0, tornado:0, meteor:0 },
+    skillAwk: { fire:0, bolt:0, tornado:0, meteor:0 },
+    pets: {},                 // id -> level
+    petStars: {},             // id -> 성급 (0~5)
+    codex: { mobs:{}, bosses:{}, rarities:{} },
+    relics: { gold:0, atk:0, hp:0, time:0, critdmg:0 },
+    spores: 0,                // 사용 가능한 포자 (유물 구매용)
+    life: { kills:0, bossKills:0, pulls:0, sporesEarned:0, rebirths:0, bestStage:1 },
+    daily: { date:'', counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0 }, claimed:{} },
+    achLv: {},                // 업적 id -> 수령한 단계 수
+    settings: { sound:true, autoPull:false, autoEnh:false },
+    farm: false,
+    lastSeen: Date.now(),
+  };
+}
+let S = defaultState();
+
+/* 전투 런타임 (저장 안 함) */
+let player = { hp:1, maxHp:1, atkTimer:0 };
+let monster = null;
+let bossTimeLeft = 0;
+let stats = null;
+let skillCd = {};
+let curZone = -1;
+let dungeonLeft = 0, dungeonMax = 1, dungeonType = 'gold', dungeonGold = 0, dungeonDia = 0;
+let goldenTimer = 40, autoT = 0, trialLeft = 0, towerLeft = 0, hasteT = 0, farmT = 0;
+
+/* ---------- 유틸 ---------- */
+const $ = id => document.getElementById(id);
+function fmt(n) {
+  n = Math.floor(n);
+  if (n >= 1e20) return (n/1e20).toFixed(n<1e21?2:1) + '해';
+  if (n >= 1e16) return (n/1e16).toFixed(n<1e17?2:1) + '경';
+  if (n >= 1e12) return (n/1e12).toFixed(n<1e13?2:1) + '조';
+  if (n >= 1e8)  return (n/1e8).toFixed(n<1e9?2:1) + '억';
+  if (n >= 1e4)  return (n/1e4).toFixed(n<1e5?1:0) + '만';
+  return n.toLocaleString();
+}
+function rnd(a,b){ return a + Math.random()*(b-a); }
+
+let toastTimer = null;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.opacity = 1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.style.opacity = 0; }, 1800);
+}
+
+function flashFx() {
+  const f = $('flashFx');
+  f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+}
+
+function floatText(targetId, text, cls) {
+  const battle = $('battle');
+  const unit = $(targetId);
+  const f = document.createElement('div');
+  f.className = 'floater ' + cls;
+  f.textContent = text;
+  f.style.left = (unit.offsetLeft + 20 + rnd(-15,15)) + 'px';
+  f.style.top  = (unit.offsetTop - 8 + rnd(-8,8)) + 'px';
+  battle.appendChild(f);
+  setTimeout(()=>f.remove(), 1000);
+}
+
+/* ---------- 사운드 (WebAudio) ---------- */
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx && typeof AudioContext !== 'undefined') {
+    try { audioCtx = new AudioContext(); } catch(e) {}
+  }
+}
+function tone(freq, dur, type, vol, delay) {
+  if (!audioCtx) return;
+  type = type || 'square'; vol = vol || 0.035; delay = delay || 0;
+  try {
+    const t0 = audioCtx.currentTime + delay;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t0); o.stop(t0 + dur);
+  } catch(e) {}
+}
+function sfx(kind) {
+  if (!S.settings.sound) return;
+  switch (kind) {
+    case 'kill':  tone(620, .07, 'square', .02); break;
+    case 'crit':  tone(880, .09, 'sawtooth', .03); break;
+    case 'skill': tone(330, .12, 'sawtooth', .03); tone(520, .1, 'sawtooth', .025, .06); break;
+    case 'level': tone(523, .09); tone(659, .09, 'square', .035, .09); tone(784, .14, 'square', .035, .18); break;
+    case 'epic':  tone(784, .1, 'triangle', .05); tone(988, .1, 'triangle', .05, .1); tone(1175, .2, 'triangle', .05, .2); break;
+    case 'boss':  tone(196, .2, 'sawtooth', .04); tone(165, .25, 'sawtooth', .04, .15); break;
+    case 'win':   tone(659, .1); tone(784, .1, 'square', .035, .1); tone(1047, .22, 'square', .04, .2); break;
+    case 'dia':   tone(1318, .07, 'sine', .04); break;
+    case 'hurt':  tone(180, .08, 'square', .02); break;
+  }
+}
+
+/* ---------- 펫 보너스 ---------- */
+function petBonuses() {
+  const b = { gold:0, atk:0, hp:0, critdmg:0 };
+  for (const id in S.pets) {
+    const def = PETS.find(p => p.id === id);
+    if (!def) continue;
+    const star = S.petStars[id] || 0;
+    const v = def.per * S.pets[id] * (1 + 0.6 * star);
+    if (def.type === 'all') { b.gold += v; b.atk += v; b.hp += v; }
+    else b[def.type] += v;
+  }
+  return b;
+}
+function bestPet() {
+  let best = null;
+  for (const id in S.pets) {
+    const def = PETS.find(p => p.id === id);
+    if (!def) continue;
+    if (!best || def.r > best.r || (def.r === best.r && S.pets[id] > S.pets[best.id])) best = def;
+  }
+  return best;
+}
+
+/* ---------- 스탯 계산 ---------- */
+function tierIndex(level) {
+  let idx = 0;
+  for (let i=0; i<TIERS.length; i++) if (level >= TIERS[i].lv) idx = i;
+  return idx;
+}
+function recalcStats() {
+  const ti = tierIndex(S.level);
+  const tm = Math.pow(1.5, ti);
+  let ea = 0, eh = 0, allEq = true, minR = 5;
+  for (const s of SLOTS) {
+    const it = S.equip[s.key];
+    if (it) {
+      const em = 1 + 0.06 * (S.enhance[s.key] || 0);
+      ea += it.atk * em; eh += it.hp * em;
+      minR = Math.min(minR, it.rarity);
+    } else allEq = false;
+  }
+  const setRank = allEq ? minR : -1;
+  const setMult = setRank >= 0 ? 1 + SET_BONUS[setRank] : 1;
+  const pb = petBonuses();
+  const sporeMult = 1 + S.life.sporesEarned * 0.02;
+  const codexMult = 1 + Object.keys(S.codex.mobs).length * 0.005
+                      + Object.keys(S.codex.bosses).length * 0.02
+                      + Object.keys(S.codex.rarities).length * 0.01;
+  // 전직 효과
+  let jobAtk = 1, jobAps = 1, jobCrit = 0, skillMult = 1, cdMult = 1;
+  if (S.job === 'warrior') jobAtk = 1 + 0.25*S.jobTier;
+  else if (S.job === 'archer') { jobAps = 1 + 0.08*S.jobTier; jobCrit = 0.04*S.jobTier; }
+  else if (S.job === 'mage') { skillMult = 1 + 0.4*S.jobTier; cdMult = Math.max(0.6, 1 - 0.06*S.jobTier); }
+  const atkMult = (1 + 0.08*S.upgrades.atk) * (1 + 0.05*S.relics.atk) * (1 + pb.atk) * sporeMult * codexMult * jobAtk * setMult;
+  const hpMult  = (1 + 0.08*S.upgrades.hp)  * (1 + 0.05*S.relics.hp)  * (1 + pb.hp)  * sporeMult * codexMult * setMult;
+  const atk   = ((8 + S.level*4) * tm + ea) * atkMult;
+  const maxHp = ((100 + S.level*25) * tm + eh) * hpMult;
+  stats = {
+    atk, maxHp,
+    aps: (1 + 0.05*S.upgrades.spd) * jobAps,
+    crit: 0.05 + 0.01*S.upgrades.crit + jobCrit,
+    critDmg: 2 + 0.1*S.relics.critdmg + pb.critdmg,
+    goldMult: (1 + 0.1*S.relics.gold) * (1 + pb.gold),
+    skillMult, cdMult, setRank,
+    tier: ti,
+  };
+  const ratio = player.maxHp > 0 ? player.hp / player.maxHp : 1;
+  player.maxHp = maxHp;
+  player.hp = Math.min(maxHp, Math.max(player.hp, maxHp * ratio));
+}
+
+/* ---------- 존 / 몬스터 ---------- */
+function zoneIndex(st){ return Math.floor((st-1)/20) % ZONES.length; }
+function applyZone() {
+  const zi = zoneIndex(S.stage);
+  if (zi === curZone) return;
+  curZone = zi;
+  const z = ZONES[zi];
+  $('app').style.background = 'linear-gradient(' + z.sky + ' 0%, ' + z.mid + ' 45%, ' + z.ground1 + ' 45.5%, ' + z.ground2 + ' 100%)';
+}
+function isBossStage(st){ return st % 10 === 0; }
+function mobHp(st){ return 20 * Math.pow(1.13, st-1); }
+function mobAtk(st){ return 4 * Math.pow(1.09, st-1); }
+function mobGold(st){ return 8 * Math.pow(1.08, st-1); }
+
+function spawnMonster() {
+  const st = S.stage;
+  applyZone();
+  if (towerLeft > 0) {
+    const f = S.tower + 1;
+    const est = f * 3;   // f층 ≈ 스테이지 3f 난이도
+    monster = {
+      emoji: TOWER_GUARDS[Math.floor((f-1)/10) % TOWER_GUARDS.length],
+      name: f + '층 수호자',
+      maxHp: mobHp(est)*5, hp: mobHp(est)*5,
+      atk: mobAtk(est)*1.5, gold: 0,
+      isBoss:false, isTower:true, atkTimer:0,
+    };
+  } else if (trialLeft > 0) {
+    const dps = stats.atk * stats.aps * (1 + stats.crit*(stats.critDmg-1));
+    const hp = dps * 22;
+    monster = {
+      emoji: TRIAL_EMOJI[Math.min(S.jobTier, TRIAL_EMOJI.length-1)],
+      name: (S.jobTier+1) + '차 전직 시험관',
+      maxHp: hp, hp: hp,
+      atk: player.maxHp * 0.05, gold: 0,
+      isBoss:false, isTrial:true, atkTimer:0,
+    };
+  } else if (dungeonLeft > 0) {
+    const est = Math.max(st, Math.floor(S.maxStage * 0.9));
+    if (dungeonType === 'dia') {
+      const pick = DIA_DUNGEON_MOBS[Math.floor(Math.random()*DIA_DUNGEON_MOBS.length)];
+      monster = {
+        emoji:pick.emoji, name:pick.name,
+        maxHp: mobHp(est)*1.1, hp: mobHp(est)*1.1,
+        atk: mobAtk(est)*0.6, gold: mobGold(est)*1.5,
+        diaDrop: 1 + Math.floor(est/60),
+        isBoss:false, isDungeon:true, atkTimer:0,
+      };
+    } else {
+      const pick = DUNGEON_MOBS[Math.floor(Math.random()*DUNGEON_MOBS.length)];
+      monster = {
+        emoji:pick.emoji, name:pick.name,
+        maxHp: mobHp(est)*0.7, hp: mobHp(est)*0.7,
+        atk: mobAtk(est)*0.6, gold: mobGold(est)*7,
+        isBoss:false, isDungeon:true, atkTimer:0,
+      };
+    }
+  } else if (isBossStage(st) && !S.farm) {
+    const b = BOSSES[(st/10 - 1) % BOSSES.length];
+    monster = {
+      emoji:b.emoji, name:b.name + ' (보스)',
+      maxHp: mobHp(st)*10, hp: mobHp(st)*10,
+      atk: mobAtk(st)*2.5, gold: mobGold(st)*15,
+      isBoss:true, atkTimer:0,
+    };
+    bossTimeLeft = BOSS_TIME;
+    sfx('boss');
+    const bt = $('battle');
+    bt.classList.remove('shake'); void bt.offsetWidth; bt.classList.add('shake');
+  } else {
+    const pool = Math.min(MONSTERS.length-1, Math.floor((st-1)/8));
+    const pick = MONSTERS[Math.max(0, pool - Math.floor(Math.random()*2))];
+    monster = {
+      emoji:pick.emoji, name:pick.name,
+      maxHp: mobHp(st), hp: mobHp(st),
+      atk: mobAtk(st), gold: mobGold(st),
+      isBoss:false, atkTimer:0,
+    };
+  }
+  const sp = $('monsterSprite');
+  sp.textContent = monster.emoji;
+  sp.classList.toggle('boss', monster.isBoss || !!monster.isTrial || !!monster.isTower);
+  $('monsterName').textContent = monster.name;
+  $('bossTimer').style.display = (monster.isBoss || monster.isDungeon || monster.isTrial || monster.isTower) ? 'block' : 'none';
+}
+
+/* ---------- 일일 퀘스트 / 업적 ---------- */
+function ensureDaily() {
+  const today = new Date().toDateString();
+  if (S.daily.date !== today) {
+    S.daily = { date: today, counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0 }, claimed:{} };
+  }
+}
+function track(id, n) {
+  ensureDaily();
+  if (id in S.daily.counts) S.daily.counts[id] += (n || 1);
+}
+function claimQuest(id) {
+  ensureDaily();
+  const q = QUESTS.find(q => q.id === id);
+  if (!q || S.daily.claimed[id] || S.daily.counts[id] < q.target) return;
+  S.daily.claimed[id] = true;
+  S.dia += q.reward;
+  sfx('dia');
+  toast('💎 +' + q.reward + ' 일일 퀘스트 완료!');
+  renderPanel();
+  saveGame();
+}
+function achClaimable(a) {
+  const lv = S.achLv[a.id] || 0;
+  return lv < a.tiers.length && a.stat() >= a.tiers[lv];
+}
+function claimAch(id) {
+  const a = ACHS.find(a => a.id === id);
+  if (!a || !achClaimable(a)) return;
+  const lv = S.achLv[a.id] || 0;
+  S.achLv[a.id] = lv + 1;
+  S.dia += a.rewards[lv];
+  sfx('dia');
+  toast('🏆 업적 달성! 💎 +' + a.rewards[lv]);
+  renderPanel();
+  saveGame();
+}
+function hasClaimables() {
+  ensureDaily();
+  for (const q of QUESTS) if (!S.daily.claimed[q.id] && S.daily.counts[q.id] >= q.target) return true;
+  for (const a of ACHS) if (achClaimable(a)) return true;
+  return false;
+}
+
+/* ---------- 전투 ---------- */
+function playerAttack() {
+  if (!monster) return;
+  const isCrit = Math.random() < stats.crit;
+  const dmg = stats.atk * rnd(0.9,1.1) * (isCrit ? stats.critDmg : 1);
+  monster.hp -= dmg;
+  floatText('monsterUnit', (isCrit?'💥':'') + fmt(dmg), isCrit?'crit':'dmg');
+  if (isCrit) sfx('crit');
+  const ps = $('playerSprite'), ms = $('monsterSprite');
+  ps.classList.remove('lunge'); void ps.offsetWidth; ps.classList.add('lunge');
+  ms.classList.remove('hitFlash'); void ms.offsetWidth; ms.classList.add('hitFlash');
+  if (monster.hp <= 0) onMonsterDeath();
+}
+
+function castSkill(sk) {
+  if (!monster) return;
+  const mult = sk.base + sk.per * S.skills[sk.id];
+  let dmg = stats.atk * mult * (stats.skillMult || 1) * rnd(0.95,1.05);
+  let label = sk.emoji;
+  if (S.skillAwk[sk.id]) {
+    if (sk.id === 'meteor') dmg *= 1.8;
+    else if (sk.id === 'bolt' && Math.random() < 0.3) { dmg *= 2; label = '⚡⚡'; }
+    else if (sk.id === 'tornado') hasteT = 3;
+    else if (sk.id === 'fire') monster.burn = { t:3, dps: dmg * 0.15 };
+  }
+  monster.hp -= dmg;
+  floatText('monsterUnit', label + ' ' + fmt(dmg), 'skillDmg');
+  sfx('skill');
+  const ms = $('monsterSprite');
+  ms.classList.remove('hitFlash'); void ms.offsetWidth; ms.classList.add('hitFlash');
+  if (monster.hp <= 0) onMonsterDeath();
+}
+
+function monsterAttack() {
+  const dmg = monster.atk * rnd(0.9,1.1);
+  player.hp -= dmg;
+  floatText('playerUnit', fmt(dmg), 'dmgTaken');
+  const ms = $('monsterSprite'), ps = $('playerSprite');
+  ms.classList.remove('lungeL'); void ms.offsetWidth; ms.classList.add('lungeL');
+  ps.classList.remove('hitFlash'); void ps.offsetWidth; ps.classList.add('hitFlash');
+  if (player.hp <= 0) onPlayerDeath();
+}
+
+function onMonsterDeath() {
+  const wasBoss = monster.isBoss;
+  const goldGain = monster.gold * stats.goldMult;
+  S.gold += goldGain;
+  S.life.kills++;
+  track('kills');
+  floatText('monsterUnit', '+' + fmt(goldGain) + ' 💰', 'goldFloat');
+  if (monster.isTower) { winTowerFloor(); return; }
+  if (monster.isTrial) { winTrial(); return; }
+  if (monster.isDungeon) {
+    dungeonGold += goldGain;
+    if (monster.diaDrop) {
+      S.dia += monster.diaDrop;
+      dungeonDia += monster.diaDrop;
+      floatText('monsterUnit', '+' + monster.diaDrop + ' 💎', 'diaFloat');
+    }
+    sfx('kill');
+    spawnMonster();
+    return;
+  }
+  if (wasBoss) S.codex.bosses[monster.emoji] = 1;
+  else S.codex.mobs[monster.emoji] = 1;
+  if (wasBoss) {
+    const diaGain = 5 + Math.floor(S.stage/10);
+    S.dia += diaGain;
+    S.life.bossKills++;
+    track('boss');
+    floatText('monsterUnit', '+' + diaGain + ' 💎', 'diaFloat');
+    sfx('win');
+    toast('👑 보스 처치! 💎 +' + diaGain);
+    advanceStage();
+  } else {
+    sfx('kill');
+    S.kills++;
+    if (!S.farm && S.kills >= KILLS_PER_STAGE) advanceStage();
+    else spawnMonster();
+  }
+}
+
+function advanceStage() {
+  S.stage++;
+  S.kills = 0;
+  S.farm = false;
+  $('retryBossBtn').style.display = 'none';
+  if (S.stage > S.maxStage) S.maxStage = S.stage;
+  if (S.stage > S.life.bestStage) S.life.bestStage = S.stage;
+  player.hp = player.maxHp;
+  spawnMonster();
+  renderPanel();
+}
+
+function onPlayerDeath() {
+  sfx('hurt');
+  if (monster.isTower) {
+    exitTower('😵 ' + (S.tower+1) + '층 수호자에게 패배...');
+  } else if (monster.isTrial) {
+    failTrial('😵 시험관에게 패배했습니다...');
+  } else if (monster.isDungeon) {
+    exitDungeon(true);
+  } else if (monster.isBoss) {
+    bossFail('😵 보스에게 패배했습니다...');
+  } else {
+    S.stage = Math.max(1, S.stage - 1);
+    S.kills = 0;
+    S.farm = isBossStage(S.stage);
+    if (S.farm) $('retryBossBtn').style.display = 'block';
+    player.hp = player.maxHp;
+    toast('😵 패배... 이전 스테이지로 후퇴합니다.');
+    spawnMonster();
+  }
+}
+
+function bossFail(msg) {
+  S.farm = true;
+  player.hp = player.maxHp;
+  toast(msg + ' 사냥하며 더 강해지세요!');
+  $('retryBossBtn').style.display = 'block';
+  spawnMonster();
+}
+
+$('retryBossBtn').addEventListener('click', () => {
+  S.farm = false;
+  S.kills = 0;
+  player.hp = player.maxHp;
+  $('retryBossBtn').style.display = 'none';
+  spawnMonster();
+});
+
+/* ---------- 무한의 탑 ---------- */
+function startTower() {
+  if (towerLeft > 0) return;
+  if (dungeonLeft > 0) { toast('던전 진행 중에는 도전할 수 없습니다!'); return; }
+  if (trialLeft > 0) { toast('전직 시험 중에는 도전할 수 없습니다!'); return; }
+  if (monster && monster.isBoss) { toast('👹 보스 전투 중에는 도전할 수 없습니다!'); return; }
+  towerLeft = TOWER_TIME;
+  player.hp = player.maxHp;
+  sfx('boss');
+  toast('🗼 무한의 탑 ' + (S.tower+1) + '층 도전! 층마다 ' + TOWER_TIME + '초!');
+  spawnMonster();
+  renderPanel();
+  saveGame();
+}
+function winTowerFloor() {
+  S.tower++;
+  track('tower');
+  const f = S.tower;
+  let diaGain = 3 + Math.floor(f/4);
+  if (f % 10 === 0) diaGain += 30;   // 10층 단위 보너스
+  const goldGain = Math.floor(mobGold(f*3) * 30 * stats.goldMult);
+  S.dia += diaGain;
+  S.gold += goldGain;
+  sfx(f % 10 === 0 ? 'epic' : 'win');
+  toast('🗼 ' + f + '층 클리어! 💎+' + diaGain + ' 💰+' + fmt(goldGain) + (f % 10 === 0 ? ' (보너스!)' : ''));
+  player.hp = player.maxHp;
+  towerLeft = TOWER_TIME;   // 다음 층 연속 도전
+  spawnMonster();
+  renderPanel();
+  saveGame();
+}
+function exitTower(msg) {
+  towerLeft = 0;
+  player.hp = player.maxHp;
+  toast(msg + ' 최고 기록 ' + S.tower + '층! 더 강해져서 재도전하세요.');
+  spawnMonster();
+  renderPanel();
+  saveGame();
+}
+
+/* ---------- 전직 시험 ---------- */
+function canJobTrial() {
+  return S.jobTier < JOB_LEVELS.length && S.level >= JOB_LEVELS[S.jobTier];
+}
+function startJobTrial() {
+  if (!canJobTrial()) return;
+  if (trialLeft > 0) return;
+  if (dungeonLeft > 0) { toast('던전 진행 중에는 도전할 수 없습니다!'); return; }
+  if (towerLeft > 0) { toast('탑 등반 중에는 도전할 수 없습니다!'); return; }
+  if (monster && monster.isBoss) { toast('👹 보스 전투 중에는 도전할 수 없습니다!'); return; }
+  trialLeft = TRIAL_TIME;
+  player.hp = player.maxHp;
+  sfx('boss');
+  toast('🎓 전직 시험 시작! ' + TRIAL_TIME + '초 안에 시험관을 쓰러뜨리세요!');
+  spawnMonster();
+  renderPanel();
+  saveGame();
+}
+function failTrial(msg) {
+  trialLeft = 0;
+  player.hp = player.maxHp;
+  toast(msg + ' 더 강해져서 재도전하세요! (불이익 없음)');
+  spawnMonster();
+  renderPanel();
+  saveGame();
+}
+function winTrial() {
+  trialLeft = 0;
+  sfx('win');
+  flashFx();
+  if (!S.job) {
+    showModal('🎓', '전직 시험 합격!', '직업을 선택하세요!\n\n⚔️ 검사 — 공격력 +25%/차수\n🏹 궁수 — 공격속도 +8% · 치명타 +4%p/차수\n🔮 법사 — 스킬 피해 +40% · 쿨타임 -6%/차수\n\n이후 전직 시험은 선택한 직업을 승급시킵니다.', JOBS.map(j => ({ label: j.emoji + ' ' + j.name, cb: ()=>chooseJob(j.id) })));
+  } else {
+    S.jobTier++;
+    const reward = 50 * S.jobTier;
+    S.dia += reward;
+    const j = JOBS.find(j => j.id === S.job);
+    recalcStats();
+    showModal(j.emoji, S.jobTier + '차 전직 성공!', j.name + '의 힘이 한층 강해졌습니다!\n(' + j.desc + ')\n\n💎 +' + reward, [
+      { label:'좋아!', cb: closeModal }
+    ]);
+  }
+  player.hp = player.maxHp;
+  spawnMonster();
+  renderPanel();
+  saveGame();
+}
+function chooseJob(id) {
+  const j = JOBS.find(j => j.id === id);
+  if (!j) return;
+  S.job = id;
+  S.jobTier = 1;
+  S.dia += 50;
+  closeModal();
+  sfx('epic');
+  toast(j.emoji + ' ' + j.name + '(으)로 전직했습니다! 💎 +50');
+  recalcStats();
+  player.hp = player.maxHp;
+  renderPanel();
+  saveGame();
+}
+
+/* ---------- 던전 (골드 / 다이아) ---------- */
+function enterDungeon(type) {
+  ensureDaily();
+  const isDia = type === 'dia';
+  const used = isDia ? S.daily.counts.diadungeon : S.daily.counts.dungeon;
+  const max = isDia ? DIA_DUNGEON_DAILY : DUNGEON_DAILY;
+  if (used >= max) { toast('오늘 던전 입장 횟수를 모두 사용했습니다!'); return; }
+  if (monster && monster.isBoss) { toast('👹 보스 전투 중에는 입장할 수 없습니다!'); return; }
+  if (dungeonLeft > 0) { toast('이미 던전 진행 중입니다!'); return; }
+  if (trialLeft > 0) { toast('전직 시험 중에는 입장할 수 없습니다!'); return; }
+  if (towerLeft > 0) { toast('탑 등반 중에는 입장할 수 없습니다!'); return; }
+  if (isDia) S.daily.counts.diadungeon++;
+  else track('dungeon');
+  dungeonType = isDia ? 'dia' : 'gold';
+  dungeonMax = isDia ? DIA_DUNGEON_TIME : DUNGEON_TIME;
+  dungeonLeft = dungeonMax;
+  dungeonGold = 0; dungeonDia = 0;
+  player.hp = player.maxHp;
+  sfx('epic');
+  toast((isDia ? '💎 다이아' : '💰 골드') + ' 던전 입장! ' + dungeonMax + '초 동안 마음껏 사냥하세요!');
+  spawnMonster();
+  renderPanel();
+  saveGame();
+}
+function exitDungeon(died) {
+  dungeonLeft = 0;
+  player.hp = player.maxHp;
+  const loot = (dungeonGold > 0 ? ' 💰 +' + fmt(dungeonGold) : '') + (dungeonDia > 0 ? ' 💎 +' + dungeonDia : '');
+  toast((died ? '😵 쓰러졌습니다... 던전 종료!' : '🏁 던전 종료!') + loot);
+  sfx('win');
+  spawnMonster();
+  renderPanel();
+  saveGame();
+}
+
+/* ---------- 탭 공격 / 황금 버섯 ---------- */
+$('battle').addEventListener('pointerdown', e => {
+  if (e.target.closest && e.target.closest('button')) return;
+  if (e.target.classList && e.target.classList.contains('golden')) return;
+  if (!monster || monster.hp <= 0 || !stats) return;
+  const dmg = stats.atk * 0.35 * rnd(0.9, 1.1);
+  monster.hp -= dmg;
+  const battle = $('battle');
+  const rect = battle.getBoundingClientRect ? battle.getBoundingClientRect() : { left:0, top:0 };
+  const f = document.createElement('div');
+  f.className = 'floater dmg';
+  f.textContent = '👆' + fmt(dmg);
+  f.style.left = ((e.clientX || 0) - rect.left - 15) + 'px';
+  f.style.top = ((e.clientY || 0) - rect.top - 24) + 'px';
+  battle.appendChild(f);
+  setTimeout(()=>f.remove(), 1000);
+  const ms = $('monsterSprite');
+  ms.classList.remove('hitFlash'); void ms.offsetWidth; ms.classList.add('hitFlash');
+  if (monster.hp <= 0) onMonsterDeath();
+});
+
+function spawnGolden() {
+  const battle = $('battle');
+  const el = document.createElement('div');
+  el.className = 'golden';
+  el.textContent = '🍄';
+  el.style.left = rnd(15, 72) + '%';
+  el.style.top = rnd(18, 52) + '%';
+  let claimed = false;
+  el.addEventListener('pointerdown', e => {
+    if (e.stopPropagation) e.stopPropagation();
+    if (claimed) return;
+    claimed = true;
+    if (Math.random() < 0.25) {
+      const d = 5 + Math.floor(Math.random() * 8);
+      S.dia += d;
+      sfx('dia');
+      toast('🌟 황금 버섯! 💎 +' + d);
+    } else {
+      const est = Math.max(S.stage, Math.floor(S.maxStage * 0.9));
+      const g = Math.floor(mobGold(est) * 40 * stats.goldMult);
+      S.gold += g;
+      sfx('win');
+      toast('🌟 황금 버섯! 💰 +' + fmt(g));
+    }
+    el.remove();
+    saveGame();
+  });
+  battle.appendChild(el);
+  setTimeout(()=>el.remove(), 7000);
+}
+
+/* ---------- 램프 (장비 뽑기) ---------- */
+function pullCost(){ return Math.floor(40 * Math.pow(1.055, S.pulls)); }
+function pull10Cost() {
+  let total = 0;
+  for (let i=0; i<10; i++) total += Math.floor(40 * Math.pow(1.055, S.pulls + i));
+  return total;
+}
+function rollRarity(weights) {
+  const total = weights.reduce((a,w)=>a+w, 0);
+  let roll = Math.random() * total;
+  for (let i=0; i<weights.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return i;
+  }
+  return 0;
+}
+function makeItem() {
+  const slot = SLOTS[Math.floor(Math.random()*SLOTS.length)];
+  const ri = rollRarity(RARITIES.map(r=>r.w));
+  const r = RARITIES[ri];
+  const st = Math.max(S.stage, Math.floor(S.maxStage*0.8));
+  const atkBase = 6 * Math.pow(1.09, st);
+  const hpBase  = 30 * Math.pow(1.09, st);
+  let atk, hp;
+  if (slot.type === 'atk') {
+    atk = atkBase * r.mult * rnd(0.85,1.2);
+    hp  = hpBase * 0.25 * r.mult * rnd(0.85,1.2);
+  } else {
+    hp  = hpBase * r.mult * rnd(0.85,1.2);
+    atk = atkBase * 0.25 * r.mult * rnd(0.85,1.2);
+  }
+  atk = Math.floor(atk); hp = Math.floor(hp);
+  return { slot:slot.key, rarity:ri, atk, hp, score: atk*5 + hp };
+}
+
+function doPulls(n, quiet) {
+  let equipped = 0, sold = 0, soldGold = 0, last = null;
+  for (let i=0; i<n; i++) {
+    const cost = pullCost();
+    if (S.gold < cost) break;
+    S.gold -= cost;
+    S.pulls++;
+    S.life.pulls++;
+    track('pulls');
+    const item = makeItem();
+    S.codex.rarities[item.rarity] = 1;
+    const cur = S.equip[item.slot];
+    if (!cur || item.score > cur.score) {
+      S.equip[item.slot] = item;
+      equipped++;
+      last = { item, kept:true };
+      if (item.rarity >= 4) {
+        const sl = SLOTS.find(s=>s.key===item.slot);
+        sfx('epic');
+        toast('✨ ' + RARITIES[item.rarity].name + ' ' + sl.name + ' 획득! ' + sl.icon);
+      }
+    } else {
+      sold++;
+      soldGold += Math.floor(cost * 0.3);
+      last = { item, kept:false };
+    }
+  }
+  if (soldGold > 0) S.gold += soldGold;
+  const done = equipped + sold;
+  if (done === 0) { if (!quiet) toast('💰 골드가 부족합니다!'); return; }
+
+  const newLevel = Math.floor(S.pulls / PULLS_PER_LEVEL) + 1;
+  if (newLevel > S.level) {
+    flashFx();
+    const oldLevel = S.level;
+    const oldTier = tierIndex(oldLevel);
+    S.level = newLevel;
+    const newTier = tierIndex(S.level);
+    recalcStats();
+    player.hp = player.maxHp;
+    const unlocked = SKILLS.filter(sk => sk.unlock > oldLevel && sk.unlock <= newLevel);
+    for (const sk of unlocked) {
+      skillCd[sk.id] = 1;
+      toast('✨ 새 스킬 해금: ' + sk.emoji + ' ' + sk.name + '!');
+      sfx('epic');
+    }
+    if (newTier > oldTier) {
+      const t = TIERS[newTier];
+      $('playerSprite').textContent = t.emoji;
+      $('playerName').textContent = t.name;
+      sfx('level');
+      showModal(t.emoji, '🎉 승급!', S.level + '레벨 달성!\n[' + t.name + '](으)로 진화했습니다!\n전체 능력치가 크게 상승합니다.', [
+        { label:'멋져요!', cb: closeModal }
+      ]);
+    } else {
+      sfx('level');
+      toast('⬆️ 레벨 업! Lv.' + S.level);
+    }
+  }
+  recalcStats();
+  if (quiet) {
+    // 자동 뽑기: 결과 토스트 생략 (레벨업·전설 획득 알림은 위에서 유지)
+  } else if (n > 1) {
+    toast('🪔 ' + done + '회: 장착 ' + equipped + ' / 판매 ' + sold + (soldGold>0 ? ' (+'+fmt(soldGold)+' 💰)' : ''));
+  } else if (last) {
+    const sl = SLOTS.find(s=>s.key===last.item.slot);
+    const r = RARITIES[last.item.rarity];
+    toast(last.kept
+      ? '🪔 ' + r.name + ' ' + sl.name + ' ' + sl.icon + ' 장착!'
+      : '🪔 ' + r.name + ' ' + sl.name + ' → 판매 +' + fmt(soldGold) + ' 💰');
+  }
+  renderPanel();
+  saveGame();
+}
+
+$('pull1Btn').addEventListener('click', ()=>doPulls(1));
+$('pull10Btn').addEventListener('click', ()=>doPulls(10));
+
+/* ---------- 자동 뽑기 / 자동 강화 ---------- */
+function updateAutoBtn() {
+  const b = $('autoPullBtn');
+  b.classList.toggle('autoOn', S.settings.autoPull);
+  $('autoPullState').textContent = S.settings.autoPull ? 'ON' : 'OFF';
+}
+$('autoPullBtn').addEventListener('click', () => {
+  S.settings.autoPull = !S.settings.autoPull;
+  updateAutoBtn();
+  sfx('dia');
+  toast(S.settings.autoPull ? '▶ 자동 뽑기 시작! 골드가 모이면 자동으로 문지릅니다.' : '⏸ 자동 뽑기 중지');
+  saveGame();
+});
+function autoTick() {
+  if (S.settings.autoPull && S.gold >= pullCost()) doPulls(1, true);
+  if (S.settings.autoEnh) {
+    let bk = null, bc = Infinity;
+    for (const s of SLOTS) {
+      if (!S.equip[s.key]) continue;
+      const c = enhCost(s.key);
+      if (c < bc) { bc = c; bk = s.key; }
+    }
+    // 골드의 2% 이하일 때만 자동 강화 (뽑기 골드를 굶기지 않도록)
+    if (bk && bc <= S.gold * 0.02) buyEnhance(bk, true);
+  }
+}
+
+/* ---------- 강화 ---------- */
+function upCost(key) {
+  const u = UPS[key];
+  return Math.floor(u.base * Math.pow(u.growth, S.upgrades[key]));
+}
+function buyUpgrade(key) {
+  const u = UPS[key];
+  if (S.upgrades[key] >= u.max) return;
+  const cost = upCost(key);
+  if (S.gold < cost) { toast('💰 골드가 부족합니다!'); return; }
+  S.gold -= cost;
+  S.upgrades[key]++;
+  track('ups');
+  recalcStats();
+  renderPanel();
+  saveGame();
+}
+
+/* ---------- 장비 강화 ---------- */
+function enhCost(key) {
+  return Math.floor(100 * Math.pow(1.35, S.enhance[key] || 0));
+}
+function buyEnhance(key, quiet) {
+  if (!S.equip[key]) { if (!quiet) toast('장비를 먼저 장착하세요!'); return; }
+  const cost = enhCost(key);
+  if (S.gold < cost) { if (!quiet) toast('💰 골드가 부족합니다!'); return; }
+  S.gold -= cost;
+  S.enhance[key] = (S.enhance[key] || 0) + 1;
+  if (!quiet) sfx('crit');
+  recalcStats();
+  renderPanel();
+  saveGame();
+}
+
+/* ---------- 스킬 강화 ---------- */
+function skillUpCost(sk) {
+  return Math.floor(sk.cost0 * Math.pow(sk.growth, S.skills[sk.id]));
+}
+function buySkillUp(id) {
+  const sk = SKILLS.find(s => s.id === id);
+  if (!sk || S.level < sk.unlock) return;
+  const cost = skillUpCost(sk);
+  if (S.gold < cost) { toast('💰 골드가 부족합니다!'); return; }
+  S.gold -= cost;
+  S.skills[id]++;
+  renderPanel();
+  saveGame();
+}
+
+/* ---------- 스킬 각성 ---------- */
+function awakenSkill(id) {
+  const sk = SKILLS.find(s => s.id === id);
+  if (!sk || S.skillAwk[id] || S.level < sk.unlock) return;
+  if (S.skills[id] + 1 < AWAKEN_REQ) { toast('스킬 Lv.' + AWAKEN_REQ + ' 필요!'); return; }
+  if (S.dia < sk.awkCost) { toast('💎 다이아가 부족합니다!'); return; }
+  S.dia -= sk.awkCost;
+  S.skillAwk[id] = 1;
+  sfx('epic');
+  flashFx();
+  toast('✦ ' + sk.name + ' 각성! ' + sk.awkDesc);
+  renderPanel();
+  saveGame();
+}
+
+/* ---------- 펫 뽑기 ---------- */
+function doPetPulls(n) {
+  const cost = n === 10 ? PET_COST*9 : PET_COST;
+  if (S.dia < cost) { toast('💎 다이아가 부족합니다! (보스·퀘스트·업적으로 획득)'); return; }
+  S.dia -= cost;
+  const results = [];
+  for (let i=0; i<n; i++) {
+    const r = rollRarity(PET_RARITY_W);
+    const pool = PETS.filter(p => p.r === r);
+    const pet = pool[Math.floor(Math.random()*pool.length)];
+    if (S.pets[pet.id]) { S.pets[pet.id]++; results.push(pet.emoji + '↑'); }
+    else { S.pets[pet.id] = 1; results.push(pet.emoji + 'NEW'); }
+    if (pet.r >= 4) { sfx('epic'); toast('🌟 ' + RARITIES[pet.r].name + ' 펫 [' + pet.name + '] ' + pet.emoji + ' 획득!'); }
+  }
+  if (n === 1 && !results[0].includes('NEW')) toast('🐾 ' + results[0].replace('↑',' 레벨 업!'));
+  else if (n === 10) toast('🐾 10연차 완료! ' + results.map(r=>r[0] + (r.includes('NEW')?'✨':'')).join(' '));
+  recalcStats();
+  updatePetSprite();
+  renderPanel();
+  saveGame();
+}
+/* ---------- 펫 성급 진화 ---------- */
+function petStarReqLv(star){ return 5 * (star + 1); }
+function petStarCost(star){ return 80 * (star + 1); }
+function evolvePet(id) {
+  const def = PETS.find(p => p.id === id);
+  if (!def || !S.pets[id]) return;
+  const star = S.petStars[id] || 0;
+  if (star >= 5) return;
+  if (S.pets[id] < petStarReqLv(star)) { toast('펫 레벨이 부족합니다! (Lv.' + petStarReqLv(star) + ' 필요 · 중복 뽑기로 상승)'); return; }
+  const cost = petStarCost(star);
+  if (S.dia < cost) { toast('💎 다이아가 부족합니다!'); return; }
+  S.dia -= cost;
+  S.petStars[id] = star + 1;
+  sfx('epic');
+  toast('🌟 ' + def.emoji + ' ' + def.name + ' ' + (star+1) + '성 진화! 효과 +60%');
+  recalcStats();
+  updatePetSprite();
+  renderPanel();
+  saveGame();
+}
+
+function updatePetSprite() {
+  const best = bestPet();
+  const el = $('petSprite');
+  if (best) { el.textContent = best.emoji; el.style.display = 'block'; }
+  else el.style.display = 'none';
+}
+
+/* ---------- 유물 ---------- */
+function relicCost(r) {
+  return Math.floor(r.base * Math.pow(r.growth, S.relics[r.id]));
+}
+function buyRelic(id) {
+  const r = RELICS.find(r => r.id === id);
+  if (!r) return;
+  const cost = relicCost(r);
+  if (S.spores < cost) { toast('🌀 포자가 부족합니다! (환생으로 획득)'); return; }
+  S.spores -= cost;
+  S.relics[id]++;
+  recalcStats();
+  renderPanel();
+  saveGame();
+}
+
+/* ---------- 환생 ---------- */
+function sporeGain() {
+  if (S.maxStage < 40) return 0;
+  return Math.floor((S.maxStage - 30) * 1.2);
+}
+function doPrestige() {
+  const gain = sporeGain();
+  if (gain <= 0) return;
+  showModal('🌀', '환생하시겠습니까?', '포자 +' + gain + '개를 얻고 처음부터 다시 시작합니다.\n(스테이지·골드·레벨·장비·강화·스킬 초기화)\n\n✅ 유지: 펫·성급, 전직, 탑 기록, 스킬 각성, 다이아, 유물, 업적, 도감, 영구 보너스\n환생 후 영구 보너스: +' + ((S.life.sporesEarned+gain)*2) + '%\n🎁 시작 골드 +' + fmt((S.life.sporesEarned+gain)*100), [
+    { label:'환생!', cb: ()=>{
+        const keep = {
+          dia:S.dia, pets:S.pets, petStars:S.petStars, codex:S.codex, relics:S.relics,
+          job:S.job, jobTier:S.jobTier, tower:S.tower, skillAwk:S.skillAwk,
+          spores:S.spores + gain,
+          life:S.life, daily:S.daily, achLv:S.achLv, settings:S.settings,
+        };
+        keep.life.sporesEarned += gain;
+        keep.life.rebirths++;
+        S = Object.assign(defaultState(), keep);
+        S.dia = keep.dia; // defaultState의 100과 충돌 방지
+        S.gold += S.life.sporesEarned * 100; // 환생 보너스: 시작 골드
+        player = { hp:1, maxHp:1, atkTimer:0 };
+        skillCd = {};
+        dungeonLeft = 0; dungeonGold = 0; dungeonDia = 0; trialLeft = 0; towerLeft = 0;
+        recalcStats();
+        player.hp = player.maxHp;
+        const t = TIERS[0];
+        $('playerSprite').textContent = t.emoji;
+        $('playerName').textContent = t.name;
+        $('retryBossBtn').style.display = 'none';
+        curZone = -1;
+        spawnMonster();
+        renderPanel();
+        saveGame();
+        closeModal();
+        sfx('level');
+        flashFx();
+        toast('🌀 환생 완료! 영구 보너스 +' + (S.life.sporesEarned*2) + '%');
+      } },
+    { label:'취소', gray:true, cb: closeModal },
+  ]);
+}
+
+/* ---------- 모달 ---------- */
+function showModal(emoji, title, body, btns) {
+  $('modalEmoji').textContent = emoji;
+  $('modalTitle').textContent = title;
+  $('modalBody').textContent = body;
+  const wrap = $('modalBtns');
+  wrap.innerHTML = '';
+  let used = false;   // 더블탭으로 보상이 중복 지급되지 않도록 모달당 1회만 실행
+  for (const b of btns) {
+    const el = document.createElement('button');
+    el.className = 'modalBtn' + (b.gray ? ' gray' : '');
+    el.textContent = b.label;
+    el.addEventListener('click', () => {
+      if (used) return;
+      used = true;
+      b.cb();
+    });
+    wrap.appendChild(el);
+  }
+  $('modalOverlay').style.display = 'flex';
+}
+function closeModal(){ $('modalOverlay').style.display = 'none'; }
+
+/* ---------- 탭 / 패널 ---------- */
+let activeTab = 'upgrade';
+document.querySelectorAll('.tabBtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeTab = btn.dataset.tab;
+    document.querySelectorAll('.tabBtn').forEach(b=>b.classList.toggle('active', b===btn));
+    renderPanel();
+  });
+});
+
+function renderPanel() {
+  const p = $('panel');
+  if (activeTab === 'upgrade') {
+    let html = '';
+    const job = JOBS.find(j => j.id === S.job);
+    const maxJob = S.jobTier >= JOB_LEVELS.length;
+    html += '<div class="upRow">' +
+      '<div class="upIcon">' + (job ? job.emoji : '🎓') + '</div>' +
+      '<div class="upInfo"><div class="upName">' + (job ? job.name + ' <span style="color:#c9a25e">' + S.jobTier + '차</span>' : '모험가 (전직 전)') + '</div>' +
+      '<div class="upDesc">' + (maxJob ? '최종 전직 완료! (' + job.desc + ')'
+        : canJobTrial() ? '🎉 ' + (S.jobTier+1) + '차 전직 시험에 도전할 수 있습니다!'
+        : 'Lv.' + JOB_LEVELS[S.jobTier] + ' 달성 시 ' + (S.jobTier+1) + '차 전직 (현재 Lv.' + S.level + ')') + '</div></div>' +
+      (maxJob ? '<button class="upBtn" disabled>MAX</button>'
+        : '<button class="upBtn purple" id="jobTrialBtn" ' + (canJobTrial() ? '' : 'disabled') + '>🎓 시험 도전</button>') + '</div>';
+    for (const key of Object.keys(UPS)) {
+      const u = UPS[key];
+      const lvl = S.upgrades[key];
+      const maxed = lvl >= u.max;
+      html += '<div class="upRow">' +
+        '<div class="upIcon">' + u.icon + '</div>' +
+        '<div class="upInfo"><div class="upName">' + u.name + ' <span style="color:#c9a25e">Lv.' + lvl + '</span></div>' +
+        '<div class="upDesc">' + u.desc + '</div></div>' +
+        '<button class="upBtn" data-up="' + key + '" ' + (maxed ? 'disabled' : '') + '>' +
+        (maxed ? 'MAX' : '💰 ' + fmt(upCost(key))) + '</button></div>';
+    }
+    p.innerHTML = html;
+    p.querySelectorAll('[data-up]').forEach(b => b.addEventListener('click', ()=>buyUpgrade(b.dataset.up)));
+    const jtb = $('jobTrialBtn');
+    if (jtb) jtb.addEventListener('click', startJobTrial);
+
+  } else if (activeTab === 'skill') {
+    let html = '';
+    for (const sk of SKILLS) {
+      const unlocked = S.level >= sk.unlock;
+      const lvl = S.skills[sk.id];
+      const awakened = !!S.skillAwk[sk.id];
+      const mult = Math.round((sk.base + sk.per*lvl) * 100);
+      let desc, btns;
+      if (!unlocked) {
+        desc = '캐릭터 Lv.' + sk.unlock + ' 달성 시 해금';
+        btns = '<button class="upBtn" disabled>잠김</button>';
+      } else {
+        desc = '공격력의 ' + mult + '% 데미지 · 쿨타임 ' + sk.cd + '초<br>' +
+          (awakened ? '<span style="color:#9c27b0">✦ ' + sk.awkDesc + '</span>'
+                    : '✦ 각성(스킬 Lv.' + AWAKEN_REQ + '): ' + sk.awkDesc);
+        btns = '<div style="display:flex; flex-direction:column; gap:3px;">' +
+          '<button class="upBtn" data-skill="' + sk.id + '">💰 ' + fmt(skillUpCost(sk)) + '</button>' +
+          (awakened ? ''
+            : (lvl + 1 >= AWAKEN_REQ
+              ? '<button class="upBtn purple" data-awk="' + sk.id + '" style="padding:4px 8px; font-size:10px;">✦ 각성 💎' + sk.awkCost + '</button>'
+              : '')) + '</div>';
+      }
+      html += '<div class="upRow">' +
+        '<div class="upIcon">' + (unlocked ? sk.emoji : '🔒') + (awakened ? '<div style="font-size:9px; color:#9c27b0; font-weight:800;">✦각성</div>' : '') + '</div>' +
+        '<div class="upInfo"><div class="upName">' + sk.name +
+        (unlocked ? ' <span style="color:#c9a25e">Lv.' + (lvl+1) + '</span>' : '') + '</div>' +
+        '<div class="upDesc">' + desc + '</div></div>' + btns + '</div>';
+    }
+    p.innerHTML = html;
+    p.querySelectorAll('[data-skill]').forEach(b => b.addEventListener('click', ()=>buySkillUp(b.dataset.skill)));
+    p.querySelectorAll('[data-awk]').forEach(b => b.addEventListener('click', ()=>awakenSkill(b.dataset.awk)));
+
+  } else if (activeTab === 'equip') {
+    let html = '<div id="equipGrid">';
+    for (const s of SLOTS) {
+      const it = S.equip[s.key];
+      if (it) {
+        const r = RARITIES[it.rarity];
+        const enh = S.enhance[s.key] || 0;
+        const em = 1 + 0.06 * enh;
+        html += '<div class="eqCard" style="border-color:' + r.color + '; background:' + r.color + '14">' +
+          '<div class="eqIcon">' + s.icon + '</div>' +
+          '<div class="eqName" style="color:' + r.color + '">' + r.name + ' ' + s.name + (enh>0 ? ' <b>+' + enh + '</b>' : '') + '</div>' +
+          '<div class="eqStat">⚔️' + fmt(it.atk*em) + ' ❤️' + fmt(it.hp*em) + '</div>' +
+          '<button class="enhBtn" data-enh="' + s.key + '">⚒️ 강화 💰' + fmt(enhCost(s.key)) + '</button></div>';
+      } else {
+        html += '<div class="eqCard"><div class="eqIcon" style="opacity:.3">' + s.icon + '</div>' +
+          '<div class="eqName" style="color:#bbb">' + s.name + '</div>' +
+          '<div class="eqStat" style="color:#ccc">비어있음</div></div>';
+      }
+    }
+    html += '</div>';
+    const sr = stats.setRank;
+    let setLine;
+    if (sr >= 1) setLine = '<span style="color:' + RARITIES[sr].color + '">🧩 세트 효과 발동! 전 부위 [' + RARITIES[sr].name + '] 이상 — 공격·체력 +' + Math.round(SET_BONUS[sr]*100) + '%</span>';
+    else if (sr === 0) setLine = '🧩 세트 효과: 전 부위 [고급] 이상 모으면 +' + Math.round(SET_BONUS[1]*100) + '% (현재 일반 등급 포함)';
+    else setLine = '🧩 세트 효과: 6부위를 모두 장착하면 발동';
+    html += '<div style="font-size:10px; font-weight:700; text-align:center; margin-top:5px; color:#a09078;">' + setLine + '</div>';
+    html += '<div style="font-size:10px; color:#a09078; font-weight:700; text-align:center; margin-top:3px;">⚒️ 강화 1레벨당 해당 부위 능력치 +6% · 장비를 교체해도 강화 레벨 유지</div>';
+    html += '<div style="text-align:center;"><button class="settingBtn" id="autoEnhBtn">' +
+      (S.settings.autoEnh ? '🔁 자동 강화 ON (골드의 2% 이하 자동 사용)' : '⏸ 자동 강화 OFF') + '</button></div>';
+    const dps = stats.atk * stats.aps * (1 + stats.crit*(stats.critDmg-1));
+    const power = dps + stats.maxHp / 20;
+    html += '<div id="statSummary">⚡ <b style="color:#e65100">전투력 ' + fmt(power) + '</b><br>' +
+      '⚔️ ' + fmt(stats.atk) + ' &nbsp; ❤️ ' + fmt(stats.maxHp) +
+      ' &nbsp; ⚡ ' + stats.aps.toFixed(2) + '/초 &nbsp; 💥 ' + Math.round(stats.crit*100) + '% (×' + stats.critDmg.toFixed(1) + ')' +
+      '<br>📊 평균 DPS ' + fmt(dps) + ' &nbsp; 💰 골드 +' + Math.round((stats.goldMult-1)*100) + '%' +
+      (stats.skillMult > 1 ? ' &nbsp; ✨ 스킬 +' + Math.round((stats.skillMult-1)*100) + '%' : '') + '</div>';
+    p.innerHTML = html;
+    p.querySelectorAll('[data-enh]').forEach(b => b.addEventListener('click', ()=>buyEnhance(b.dataset.enh)));
+    $('autoEnhBtn').addEventListener('click', ()=>{
+      S.settings.autoEnh = !S.settings.autoEnh;
+      sfx('dia');
+      renderPanel();
+      saveGame();
+    });
+
+  } else if (activeTab === 'pet') {
+    const owned = Object.keys(S.pets).length;
+    let html = '<div class="petBtns">' +
+      '<button class="petPullBtn" id="petPull1">🥚 펫 뽑기<br>💎 ' + PET_COST + '</button>' +
+      '<button class="petPullBtn" id="petPull10">🥚 ×10<br>💎 ' + (PET_COST*9) + '</button></div>';
+    html += '<div style="font-size:10.5px; color:#a09078; font-weight:700; text-align:center; margin-top:5px;">보유 ' + owned + '/' + PETS.length + ' · 중복 시 레벨 업 · 레벨을 모아 ★진화 (성급당 효과 +60%)</div>';
+    html += '<div id="petGrid">';
+    for (const pet of PETS) {
+      const lvl = S.pets[pet.id] || 0;
+      const r = RARITIES[pet.r];
+      if (lvl > 0) {
+        const star = S.petStars[pet.id] || 0;
+        const eff = Math.round(pet.per * lvl * (1 + 0.6*star) * 100);
+        let evoBtn;
+        if (star >= 5) evoBtn = '<button class="petEvoBtn" disabled>★MAX</button>';
+        else {
+          const ready = lvl >= petStarReqLv(star);
+          evoBtn = '<button class="petEvoBtn" data-evo="' + pet.id + '">' +
+            (ready ? '🌟 진화 💎' + petStarCost(star) : 'Lv.' + petStarReqLv(star) + ' 필요') + '</button>';
+        }
+        html += '<div class="petCard" style="border-color:' + r.color + '; background:' + r.color + '14">' +
+          '<div class="petIcon">' + pet.emoji + '</div>' +
+          '<div class="petStarRow">' + '★'.repeat(star) + '</div>' +
+          '<div class="petName" style="color:' + r.color + '">' + pet.name + ' Lv.' + lvl + '</div>' +
+          '<div class="petStat">' + PET_TYPE_LABEL[pet.type] + ' +' + eff + '%</div>' +
+          evoBtn + '</div>';
+      } else {
+        html += '<div class="petCard"><div class="petIcon" style="filter:brightness(0); opacity:.25">' + pet.emoji + '</div>' +
+          '<div class="petName" style="color:#bbb">???</div>' +
+          '<div class="petStat" style="color:#ccc">' + r.name + '</div></div>';
+      }
+    }
+    html += '</div>';
+    p.innerHTML = html;
+    $('petPull1').addEventListener('click', ()=>doPetPulls(1));
+    $('petPull10').addEventListener('click', ()=>doPetPulls(10));
+    p.querySelectorAll('[data-evo]').forEach(b => b.addEventListener('click', ()=>evolvePet(b.dataset.evo)));
+
+  } else if (activeTab === 'prestige') {
+    const gain = sporeGain();
+    const can = gain > 0;
+    let html = '<div class="prestigeHead"><h3>🌀 환생 &nbsp;<span style="font-size:11px; color:#8a7a68;">보유 포자 ' + fmt(S.spores) + ' · 영구 보너스 +' + (S.life.sporesEarned*2) + '%</span></h3>' +
+      '<p>스테이지 40+ 도달 시 환생 가능 · 포자 1개당 영구 +2% (자동 적용) · 포자로 아래 유물도 구매!</p></div>' +
+      '<button id="prestigeBtn" ' + (can?'':'disabled') + '>' +
+      (can ? '🌀 환생하기 (+' + gain + ' 포자)' : '🔒 스테이지 40 필요 (현재 최고 ' + S.maxStage + ')') + '</button>';
+    html += '<div class="sectionTitle">🏺 유물 상점 (포자 사용)</div>';
+    for (const r of RELICS) {
+      html += '<div class="upRow">' +
+        '<div class="upIcon">' + r.icon + '</div>' +
+        '<div class="upInfo"><div class="upName">' + r.name + ' <span style="color:#c9a25e">Lv.' + S.relics[r.id] + '</span></div>' +
+        '<div class="upDesc">' + r.desc + '</div></div>' +
+        '<button class="upBtn purple" data-relic="' + r.id + '">🌀 ' + fmt(relicCost(r)) + '</button></div>';
+    }
+    p.innerHTML = html;
+    const btn = $('prestigeBtn');
+    if (btn && can) btn.addEventListener('click', doPrestige);
+    p.querySelectorAll('[data-relic]').forEach(b => b.addEventListener('click', ()=>buyRelic(b.dataset.relic)));
+
+  } else { // more
+    ensureDaily();
+    const dgUsed = S.daily.counts.dungeon;
+    const dgCan = dgUsed < DUNGEON_DAILY;
+    const ddUsed = S.daily.counts.diadungeon;
+    const ddCan = ddUsed < DIA_DUNGEON_DAILY;
+    let html = '<div class="sectionTitle">⚔️ 던전</div>' +
+      '<div class="questRow"><div class="questInfo"><div class="questName">💰 골드 던전</div>' +
+      '<div class="questProg">' + DUNGEON_TIME + '초 동안 골드 몬스터 사냥 · 오늘 ' + dgUsed + '/' + DUNGEON_DAILY + '회</div></div>' +
+      '<button class="claimBtn" id="dungeonBtn" ' + (dgCan ? '' : 'disabled') + '>' + (dgCan ? '입장!' : '내일 다시') + '</button></div>' +
+      '<div class="questRow"><div class="questInfo"><div class="questName">💎 다이아 던전</div>' +
+      '<div class="questProg">' + DIA_DUNGEON_TIME + '초 동안 수정 몬스터 사냥 · 오늘 ' + ddUsed + '/' + DIA_DUNGEON_DAILY + '회</div></div>' +
+      '<button class="claimBtn" id="diaDungeonBtn" ' + (ddCan ? '' : 'disabled') + '>' + (ddCan ? '입장!' : '내일 다시') + '</button></div>' +
+      '<div class="questRow"><div class="questInfo"><div class="questName">🗼 무한의 탑</div>' +
+      '<div class="questProg">최고 ' + S.tower + '층 클리어 · 층당 ' + TOWER_TIME + '초 연속 등반 · 첫 클리어 보상 💎</div></div>' +
+      '<button class="claimBtn" id="towerBtn">' + (S.tower+1) + '층 도전!</button></div>';
+    const cx = S.codex;
+    const mobCnt = Object.keys(cx.mobs).length, bossCnt = Object.keys(cx.bosses).length, rarCnt = Object.keys(cx.rarities).length;
+    const codexPct = (mobCnt*0.5 + bossCnt*2 + rarCnt*1).toFixed(1);
+    html += '<div class="sectionTitle">📖 도감 <span style="font-size:10px; color:#9c27b0;">영구 보너스 공격·체력 +' + codexPct + '%</span></div>';
+    html += '<div style="font-size:10px; color:#a09078; font-weight:700;">몬스터 ' + mobCnt + '/' + MONSTERS.length + ' (+0.5%) · 보스 ' + bossCnt + '/' + BOSSES.length + ' (+2%) · 장비 등급 ' + rarCnt + '/' + RARITIES.length + ' (+1%)</div>';
+    html += '<div class="codexGrid">' + MONSTERS.map(m =>
+      '<span class="' + (cx.mobs[m.emoji] ? '' : 'undisc') + '" title="' + m.name + '">' + m.emoji + '</span>').join('') + '</div>';
+    html += '<div class="codexGrid">' + BOSSES.map(b =>
+      '<span class="' + (cx.bosses[b.emoji] ? '' : 'undisc') + '" title="' + b.name + '">' + b.emoji + '</span>').join('') +
+      RARITIES.map((r,i) =>
+      '<span style="font-size:10px; font-weight:800; line-height:2; color:' + (cx.rarities[i] ? r.color : '#ccc') + '">' + (cx.rarities[i] ? r.name : '???') + '</span>').join('') + '</div>';
+    html += '<div class="sectionTitle">📅 일일 퀘스트</div>';
+    for (const q of QUESTS) {
+      const cnt = Math.min(S.daily.counts[q.id], q.target);
+      const claimed = !!S.daily.claimed[q.id];
+      const done = cnt >= q.target;
+      html += '<div class="questRow">' +
+        '<div class="questInfo"><div class="questName">' + q.name + '</div>' +
+        '<div class="questProg">' + cnt + '/' + q.target + ' · 💎 ' + q.reward + '</div></div>' +
+        '<button class="claimBtn" data-quest="' + q.id + '" ' + ((done && !claimed) ? '' : 'disabled') + '>' +
+        (claimed ? '완료 ✓' : done ? '받기!' : '진행중') + '</button></div>';
+    }
+    html += '<div class="sectionTitle">🏆 업적</div>';
+    for (const a of ACHS) {
+      const lv = S.achLv[a.id] || 0;
+      const maxed = lv >= a.tiers.length;
+      const target = maxed ? a.tiers[a.tiers.length-1] : a.tiers[lv];
+      const cur = Math.min(a.stat(), target);
+      const can = achClaimable(a);
+      html += '<div class="questRow">' +
+        '<div class="questInfo"><div class="questName">' + a.name + ' ' + (lv+ (maxed?0:1)) + '단계</div>' +
+        '<div class="questProg">' + a.desc + ' ' + fmt(cur) + '/' + fmt(target) + (maxed ? ' · 완료' : ' · 💎 ' + a.rewards[lv]) + '</div></div>' +
+        '<button class="claimBtn" data-ach="' + a.id + '" ' + (can ? '' : 'disabled') + '>' +
+        (maxed ? 'MAX' : can ? '받기!' : '진행중') + '</button></div>';
+    }
+    html += '<div class="sectionTitle">⚙️ 설정</div>' +
+      '<button class="settingBtn" id="soundBtn">' + (S.settings.sound ? '🔊 사운드 켜짐' : '🔇 사운드 꺼짐') + '</button>' +
+      '<button class="settingBtn" id="exportBtn">📤 저장 내보내기</button>' +
+      '<button class="settingBtn" id="importBtn">📥 가져오기</button>' +
+      '<button class="settingBtn danger" id="resetBtn">🗑️ 초기화</button>' +
+      '<div style="font-size:10px; color:#b0a088; margin-top:6px;">누적 처치 ' + fmt(S.life.kills) + ' · 보스 ' + fmt(S.life.bossKills) + ' · 환생 ' + S.life.rebirths + '회' +
+      '<br>📈 오프라인 효율 ' + Math.round(offlineEff()*100) + '%' + (offlineEff() >= 1 ? ' 💯' : '/100%') + ' · 보상 캡 ' + (offlineCapSec()/3600) + '시간</div>';
+    p.innerHTML = html;
+    $('dungeonBtn').addEventListener('click', ()=>enterDungeon('gold'));
+    $('diaDungeonBtn').addEventListener('click', ()=>enterDungeon('dia'));
+    $('towerBtn').addEventListener('click', startTower);
+    p.querySelectorAll('[data-quest]').forEach(b => b.addEventListener('click', ()=>claimQuest(b.dataset.quest)));
+    p.querySelectorAll('[data-ach]').forEach(b => b.addEventListener('click', ()=>claimAch(b.dataset.ach)));
+    $('soundBtn').addEventListener('click', ()=>{ S.settings.sound = !S.settings.sound; sfx('dia'); renderPanel(); saveGame(); });
+    $('exportBtn').addEventListener('click', exportSave);
+    $('importBtn').addEventListener('click', importSave);
+    $('resetBtn').addEventListener('click', resetSave);
+  }
+}
+
+/* ---------- 스킬 바 ---------- */
+function buildSkillBar() {
+  const bar = $('skillBar');
+  bar.innerHTML = '';
+  for (const sk of SKILLS) {
+    const chip = document.createElement('div');
+    chip.className = 'skillChip';
+    chip.id = 'chip_' + sk.id;
+    chip.innerHTML = '<span id="chipIcon_' + sk.id + '">' + sk.emoji + '</span><div class="cdOverlay" id="chipCd_' + sk.id + '"></div>';
+    bar.appendChild(chip);
+  }
+}
+
+/* ---------- 저장 / 불러오기 ---------- */
+function saveGame() {
+  S.lastSeen = Date.now();
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e) {}
+}
+function mergeState(data) {
+  const d = defaultState();
+  S = Object.assign(d, data);
+  S.upgrades = Object.assign({atk:0,hp:0,spd:0,crit:0}, data.upgrades);
+  S.equip = Object.assign({weapon:null,helmet:null,armor:null,gloves:null,boots:null,ring:null}, data.equip);
+  // 구버전 장비에 score가 없으면 재계산 (없으면 새 장비가 영원히 장착되지 않음)
+  for (const k in S.equip) {
+    const it = S.equip[k];
+    if (it && typeof it.score !== 'number') it.score = it.atk*5 + it.hp;
+  }
+  S.enhance = Object.assign({weapon:0,helmet:0,armor:0,gloves:0,boots:0,ring:0}, data.enhance);
+  S.skills = Object.assign({fire:0,bolt:0,tornado:0,meteor:0}, data.skills);
+  S.skillAwk = Object.assign({fire:0,bolt:0,tornado:0,meteor:0}, data.skillAwk);
+  S.pets = data.pets || {};
+  S.petStars = data.petStars || {};
+  S.codex = { mobs:{}, bosses:{}, rarities:{} };
+  if (data.codex) {
+    Object.assign(S.codex.mobs, data.codex.mobs);
+    Object.assign(S.codex.bosses, data.codex.bosses);
+    Object.assign(S.codex.rarities, data.codex.rarities);
+  }
+  S.relics = Object.assign({gold:0,atk:0,hp:0,time:0,critdmg:0}, data.relics);
+  S.life = Object.assign({kills:0,bossKills:0,pulls:0,sporesEarned:0,rebirths:0,bestStage:1}, data.life);
+  S.daily = Object.assign({date:'',counts:{kills:0,pulls:0,ups:0,boss:0},claimed:{}}, data.daily);
+  S.daily.counts = Object.assign({kills:0,pulls:0,ups:0,boss:0,dungeon:0,diadungeon:0,tower:0}, S.daily.counts);
+  S.achLv = data.achLv || {};
+  S.settings = Object.assign({sound:true,autoPull:false,autoEnh:false}, data.settings);
+  S.job = data.job || null;
+  S.jobTier = data.jobTier || 0;
+  S.tower = data.tower || 0;
+}
+function loadGame() {
+  try {
+    let raw = localStorage.getItem(SAVE_KEY);
+    if (raw) { mergeState(JSON.parse(raw)); return true; }
+    // v1 → v2 마이그레이션
+    raw = localStorage.getItem(OLD_SAVE_KEY);
+    if (raw) {
+      const old = JSON.parse(raw);
+      mergeState(old);
+      S.dia = 100;
+      S.life.sporesEarned = old.spores || 0;   // 기존 포자 → 영구 보너스 유지
+      S.spores = old.spores || 0;              // + 유물 구매 화폐로도 지급
+      S.life.rebirths = old.rebirths || 0;
+      S.life.bestStage = old.maxStage || 1;
+      saveGame();
+      return true;
+    }
+    return false;
+  } catch(e) { return false; }
+}
+
+function exportSave() {
+  saveGame();
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify(S))));
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(
+      ()=>toast('📤 저장 코드가 클립보드에 복사되었습니다!'),
+      ()=>prompt('아래 코드를 복사해 보관하세요:', code)
+    );
+  } else {
+    prompt('아래 코드를 복사해 보관하세요:', code);
+  }
+}
+function importSave() {
+  const code = prompt('저장 코드를 붙여넣으세요:');
+  if (!code) return;
+  try {
+    const data = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+    if (typeof data.gold !== 'number' || !isFinite(data.gold)) throw new Error('bad');
+    if (typeof data.dia !== 'number' || !isFinite(data.dia)) throw new Error('bad');
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    location.reload();
+  } catch(e) {
+    toast('❌ 올바르지 않은 저장 코드입니다.');
+  }
+}
+function resetSave() {
+  showModal('🗑️', '정말 초기화할까요?', '모든 진행 상황(펫·유물·업적 포함)이 삭제됩니다.\n되돌릴 수 없습니다!', [
+    { label:'초기화', cb: ()=>{
+        localStorage.removeItem(SAVE_KEY);
+        localStorage.removeItem(OLD_SAVE_KEY);
+        location.reload();
+      } },
+    { label:'취소', gray:true, cb: closeModal },
+  ]);
+}
+
+/* ---------- 오프라인 보상 ---------- */
+// 오프라인 효율: 기본 75% → 모래시계·환생·탑으로 키워 100%(온라인 사냥과 동일)까지 도달 가능
+function offlineEff() {
+  return Math.min(1, 0.75 + 0.05*S.relics.time + 0.01*S.life.rebirths + 0.001*S.tower);
+}
+function offlineCapSec() {
+  return Math.min(24, 12 + 2*S.relics.time) * 3600;
+}
+// 실제 자동사냥 킬 속도 — 스킬·탭·황금버섯 수입 제외 + 데미지 5% 하향 추정(타수 경계 편향 보정)
+// → 효율 100%여도 오프라인 보상이 온라인 실수급을 절대 넘지 않음
+function offlineKillRate() {
+  const avgDmg = stats.atk * (1 + stats.crit * (stats.critDmg - 1)) * 0.95;
+  const hits = Math.max(1, Math.ceil(mobHp(S.stage) / avgDmg));
+  return stats.aps / hits;
+}
+function checkOffline() {
+  const elapsed = (Date.now() - S.lastSeen) / 1000;
+  if (elapsed < 120) return;
+  const capped = Math.min(elapsed, offlineCapSec());
+  const eff = offlineEff();
+  const kills = offlineKillRate() * capped;
+  const reward = Math.floor(mobGold(S.stage) * kills * stats.goldMult * eff);
+  if (reward <= 0) return;
+  const h = Math.floor(capped/3600), m = Math.floor((capped%3600)/60);
+  const timeStr = (h>0 ? h+'시간 ' : '') + m + '분';
+  showModal('🎁', '오프라인 보상!', '자리를 비운 동안 버섯이 열심히 싸웠어요!\n\n⏰ ' + timeStr + ' 동안 약 ' + fmt(kills) + '마리 처치\n💰 ' + fmt(reward) + ' 골드 획득!\n\n📈 오프라인 효율 ' + Math.round(eff*100) + '%' +
+    (eff >= 1 ? ' — 온라인 사냥과 동일! 💯' : '\n(⏳ 모래시계 · 🌀 환생 · 🗼 탑으로 100%까지 상승)'), [
+    { label:'받기!', cb: ()=>{ S.gold += reward; closeModal(); saveGame(); } }
+  ]);
+}
+
+/* ---------- 구름 장식 ---------- */
+function makeClouds() {
+  const battle = $('battle');
+  ['☁️','☁️','⛅'].forEach((c,i)=>{
+    const el = document.createElement('div');
+    el.className = 'cloud';
+    el.textContent = c;
+    el.style.top = (8 + i*16) + '%';
+    el.style.animationDuration = (28 + i*14) + 's';
+    el.style.animationDelay = (-i*11) + 's';
+    battle.appendChild(el);
+  });
+}
+
+/* ---------- 메인 루프 ---------- */
+let lastTick = performance.now();
+function tick(now) {
+  const dt = Math.min(0.25, (now - lastTick) / 1000);
+  lastTick = now;
+
+  if (monster) {
+    player.atkTimer += dt * stats.aps * (hasteT > 0 ? 1.3 : 1);
+    if (hasteT > 0) hasteT -= dt;
+    while (player.atkTimer >= 1 && monster && monster.hp > 0) {
+      player.atkTimer -= 1;
+      playerAttack();
+    }
+    // 화상 도트 (파이어볼 각성)
+    if (monster && monster.burn && monster.burn.t > 0 && monster.hp > 0) {
+      monster.burn.t -= dt;
+      monster.hp -= monster.burn.dps * dt;
+      if (monster.hp <= 0) onMonsterDeath();
+    }
+    // 스킬 자동 시전
+    for (const sk of SKILLS) {
+      if (S.level < sk.unlock) continue;
+      if (skillCd[sk.id] === undefined) skillCd[sk.id] = sk.cd * 0.5;
+      skillCd[sk.id] -= dt;
+      if (skillCd[sk.id] <= 0 && monster && monster.hp > 0) {
+        skillCd[sk.id] = sk.cd * (stats.cdMult || 1);
+        castSkill(sk);
+      }
+    }
+    if (monster) {
+      monster.atkTimer += dt;
+      if (monster.atkTimer >= 1) {
+        monster.atkTimer -= 1;
+        if (player.hp > 0) monsterAttack();
+      }
+    }
+    if (monster && monster.isBoss) {
+      bossTimeLeft -= dt;
+      if (bossTimeLeft <= 0) bossFail('⏱ 시간 초과!');
+    }
+    if (dungeonLeft > 0) {
+      dungeonLeft -= dt;
+      if (dungeonLeft <= 0) exitDungeon(false);
+    }
+    if (trialLeft > 0) {
+      trialLeft -= dt;
+      if (trialLeft <= 0) failTrial('⏱ 시간 초과!');
+    }
+    if (towerLeft > 0) {
+      towerLeft -= dt;
+      if (towerLeft <= 0) exitTower('⏱ 시간 초과!');
+    }
+    // 파밍 모드 자동 보스 재도전 (방치 중에도 진행이 멈추지 않도록)
+    if (S.farm && dungeonLeft <= 0 && trialLeft <= 0 && towerLeft <= 0) {
+      farmT += dt;
+      if (farmT >= 45) {
+        farmT = 0;
+        S.farm = false;
+        S.kills = 0;
+        player.hp = player.maxHp;
+        $('retryBossBtn').style.display = 'none';
+        toast('👹 보스에 자동으로 재도전합니다!');
+        spawnMonster();
+      }
+    } else farmT = 0;
+  }
+  // 황금 버섯 출현
+  goldenTimer -= dt;
+  if (goldenTimer <= 0) {
+    spawnGolden();
+    goldenTimer = rnd(45, 100);
+  }
+  // 자동 뽑기 / 자동 강화 (0.6초 간격)
+  autoT += dt;
+  if (autoT >= 0.6) {
+    autoT = 0;
+    autoTick();
+  }
+  // 자연 회복
+  player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.03 * dt);
+
+  render();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- 렌더 ---------- */
+function render() {
+  $('goldText').textContent = fmt(S.gold);
+  $('diaText').textContent = fmt(S.dia);
+  $('sporeText').textContent = fmt(S.spores);
+
+  const t = TIERS[tierIndex(S.level)];
+  const job = S.job ? JOBS.find(j => j.id === S.job) : null;
+  $('charInfo').innerHTML = t.emoji + ' Lv.' + S.level + '<small>' + t.name +
+    (job ? ' · ' + job.emoji + job.name + S.jobTier : '') +
+    (S.life.sporesEarned>0 ? ' · 🌀+' + (S.life.sporesEarned*2) + '%' : '') + '</small>';
+
+  if (towerLeft > 0) {
+    $('stageLabel').textContent = '🗼 무한의 탑 ' + (S.tower+1) + '층';
+    $('killFill').style.width = '100%';
+    $('bossTimer').textContent = '⏱ ' + Math.max(0,towerLeft).toFixed(1);
+  } else if (trialLeft > 0) {
+    $('stageLabel').textContent = '🎓 ' + (S.jobTier+1) + '차 전직 시험';
+    $('killFill').style.width = '100%';
+    $('bossTimer').textContent = '⏱ ' + Math.max(0,trialLeft).toFixed(1);
+  } else if (dungeonLeft > 0) {
+    $('stageLabel').textContent = dungeonType === 'dia'
+      ? '💎 다이아 던전 · +' + dungeonDia + ' 💎'
+      : '💰 골드 던전 · +' + fmt(dungeonGold);
+    $('killFill').style.width = (dungeonLeft/dungeonMax*100) + '%';
+    $('bossTimer').textContent = '⏱ ' + Math.max(0,dungeonLeft).toFixed(1);
+  } else {
+    const z = ZONES[zoneIndex(S.stage)];
+    $('stageLabel').textContent = (isBossStage(S.stage) && !S.farm ? '👹 ' : '') + z.name + ' · ' + S.stage + (S.farm ? ' (파밍중)' : '');
+    $('killFill').style.width = (S.farm || (monster && monster.isBoss) ? 100 : (S.kills/KILLS_PER_STAGE*100)) + '%';
+  }
+
+  $('playerHpFill').style.width = Math.max(0, player.hp/player.maxHp*100) + '%';
+  if (monster) $('monsterHpFill').style.width = Math.max(0, monster.hp/monster.maxHp*100) + '%';
+  if (monster && monster.isBoss) $('bossTimer').textContent = '⏱ ' + Math.max(0,bossTimeLeft).toFixed(1);
+  const remainT = towerLeft > 0 ? towerLeft : trialLeft > 0 ? trialLeft : dungeonLeft > 0 ? dungeonLeft
+    : (monster && monster.isBoss ? bossTimeLeft : 99);
+  $('bossTimer').classList.toggle('urgent', remainT < 10);
+
+  const c1 = pullCost(), c10 = pull10Cost();
+  $('pull1Cost').textContent = '💰 ' + fmt(c1);
+  $('pull10Cost').textContent = '💰 ' + fmt(c10);
+  $('pull1Btn').disabled = S.gold < c1;
+  $('pull10Btn').disabled = S.gold < c1;
+
+  const prog = S.pulls % PULLS_PER_LEVEL;
+  $('lvProgressFill').style.width = (prog/PULLS_PER_LEVEL*100) + '%';
+  $('lvProgressText').textContent = prog + '/' + PULLS_PER_LEVEL;
+
+  // 스킬 칩
+  for (const sk of SKILLS) {
+    const chip = $('chip_' + sk.id);
+    if (!chip) continue;
+    const locked = S.level < sk.unlock;
+    chip.classList.toggle('locked', locked);
+    $('chipIcon_' + sk.id).textContent = locked ? '🔒' : sk.emoji;
+    const cd = skillCd[sk.id];
+    $('chipCd_' + sk.id).style.height = (locked ? 100 : (cd !== undefined && cd > 0 ? cd/sk.cd*100 : 0)) + '%';
+  }
+
+  // 메뉴 탭 빨간 점
+  $('moreDot').style.display = hasClaimables() ? 'block' : 'none';
+}
+
+/* ---------- 시작 ---------- */
+function init() {
+  const loaded = loadGame();
+  ensureDaily();
+  recalcStats();
+  player.hp = player.maxHp;
+  const t = TIERS[tierIndex(S.level)];
+  $('playerSprite').textContent = t.emoji;
+  $('playerName').textContent = t.name;
+  if (S.farm) $('retryBossBtn').style.display = 'block';
+  buildSkillBar();
+  updateAutoBtn();
+  updatePetSprite();
+  makeClouds();
+  spawnMonster();
+  renderPanel();
+  if (loaded) checkOffline();
+  document.addEventListener('pointerdown', ensureAudio, { once:true });
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && String(location.protocol || '').indexOf('http') === 0) {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+  setInterval(saveGame, 5000);
+  window.addEventListener('beforeunload', saveGame);
+  document.addEventListener('visibilitychange', ()=>{ if (document.hidden) saveGame(); });
+  requestAnimationFrame(tick);
+}
+init();
+</script>
+</body>
+</html>
