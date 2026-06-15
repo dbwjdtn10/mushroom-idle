@@ -310,6 +310,12 @@
     min-width:70px; cursor:pointer; box-shadow:0 2px 0 #c98e00;
   }
   .claimBtn:disabled { filter:grayscale(.85); opacity:.55; box-shadow:0 2px 0 #999; }
+  .claimBtn.gray { background:linear-gradient(#e8dcc8,#d6c4a6); color:#6b5536; box-shadow:0 2px 0 #b09870; min-width:auto; }
+  .guildExp { position:relative; height:14px; background:#efe3cf; border-radius:7px; overflow:hidden; margin:2px 0; box-shadow:inset 0 1px 2px rgba(0,0,0,.15); }
+  .guildExpFill { height:100%; background:linear-gradient(90deg,#7fc8ff,#4a90d9); transition:width .3s; }
+  .guildExpTxt { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:#3a4a5a; text-shadow:0 1px 1px rgba(255,255,255,.5); }
+  .guildReady { background:linear-gradient(90deg,rgba(255,236,179,.6),rgba(255,224,130,.25)); border-radius:8px; animation:guildPulse 1.4s ease-in-out infinite; }
+  @keyframes guildPulse { 0%,100%{ background-color:rgba(255,236,179,.15); } 50%{ background-color:rgba(255,213,79,.4); } }
   .settingBtn {
     border:none; background:#efe7da; color:#7a5c3e; padding:8px 12px; border-radius:10px;
     font-size:11.5px; font-weight:800; cursor:pointer; margin:3px 3px 3px 0;
@@ -431,6 +437,30 @@ const DIA_DUNGEON_DAILY = 1;
 const TRIAL_TIME = 30;
 const TOWER_TIME = 30;
 const PULLS_PER_LEVEL = 3;
+
+/* ---------- 길드 원정 (실시간·오프라인 병행 진행) ----------
+   전투/던전/탑과 병렬로 백그라운드에서 진행되는 장기 콘텐츠.
+   파견은 무료(시간이 비용) · 보상은 골드(진행도 연동)·다이아(시간제라 가속 불가)·길드 경험치.
+   다이아로 즉시완료 가능(다이아 적체 해소). 길드 레벨 → 동시 슬롯·보상 배율·신규 원정 해금. 환생 유지. */
+const GUILD_MAX_LV = 30;
+const GUILD_SLOT_MAX = 4;
+const EXPEDITIONS = [
+  { id:'patrol', emoji:'🛡️', name:'마을 순찰', dur:10*60,   goldMul:80,   dia:0,  exp:10,  minLv:1 },
+  { id:'hunt',   emoji:'🏹', name:'마수 사냥', dur:45*60,   goldMul:420,  dia:2,  exp:30,  minLv:1 },
+  { id:'relic',  emoji:'🗺️', name:'유적 탐사', dur:3*3600,  goldMul:0,    dia:14, exp:90,  minLv:4 },
+  { id:'nest',   emoji:'🏔️', name:'용의 둥지', dur:8*3600,  goldMul:2400, dia:40, exp:240, minLv:8 },
+];
+function guildSlotCount(lv){ return Math.min(GUILD_SLOT_MAX, 1 + Math.floor((lv-1)/4)); }
+function guildExpNeed(lv){ return 100 * lv; }
+function guildMult(){ return 1 + 0.04 * (S.guild.level - 1); }
+function expedReward(e){
+  const m = guildMult();
+  return {
+    gold: e.goldMul ? Math.floor(mobGold(S.maxStage) * e.goldMul * m) : 0,
+    dia:  e.dia ? Math.floor(e.dia * m) : 0,
+    exp:  e.exp,
+  };
+}
 
 const SLOTS = [
   { key:'weapon', name:'무기',   icon:'⚔️', type:'atk' },
@@ -556,6 +586,7 @@ const QUESTS = [
   { id:'boss',  name:'보스 1회 처치',       target:1,   reward:40 },
   { id:'dungeon', name:'골드 던전 1회 입장', target:1,  reward:25 },
   { id:'tower',   name:'무한의 탑 1층 등반', target:1,  reward:20 },
+  { id:'exped',   name:'길드 원정 1회 파견', target:1,  reward:25 },
 ];
 
 const ACHS = [
@@ -567,6 +598,7 @@ const ACHS = [
   { id:'enh',     name:'대장장이',   desc:'장비 강화 합계', tiers:[10,40,120,300],         rewards:[30,80,200,500],  stat:()=>Object.values(S.enhance).reduce((a,b)=>a+b,0) },
   { id:'job',     name:'전직의 길',  desc:'전직 차수',     tiers:[1,2,3,4],               rewards:[50,100,200,400], stat:()=>S.jobTier },
   { id:'tower',   name:'탑 등반가',  desc:'무한의 탑 층수', tiers:[10,30,60,100],          rewards:[40,100,250,600], stat:()=>S.tower },
+  { id:'guild',   name:'길드 마스터', desc:'길드 레벨',     tiers:[3,8,15,25],             rewards:[40,100,250,600], stat:()=>S.guild.level },
 ];
 
 /* ---------- 상태 ---------- */
@@ -593,7 +625,8 @@ function defaultState() {
     relics: { gold:0, atk:0, hp:0, time:0, critdmg:0 },
     spores: 0,                // 사용 가능한 용비늘 (유물 구매용 — 내부 키는 구버전 호환 위해 spores 유지)
     life: { kills:0, bossKills:0, pulls:0, sporesEarned:0, rebirths:0, bestStage:1 },
-    daily: { date:'', counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0 }, claimed:{} },
+    daily: { date:'', counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0, exped:0 }, claimed:{} },
+    guild: { level:1, exp:0, slots:[null, null, null, null] },  // 슬롯: {type, endAt(ms)} | null — 환생 유지
     achLv: {},                // 업적 id -> 수령한 단계 수
     settings: { sound:true, autoPull:false, autoEnh:false },
     farm: false,
@@ -861,7 +894,7 @@ function spawnMonster() {
 function ensureDaily() {
   const today = new Date().toDateString();
   if (S.daily.date !== today) {
-    S.daily = { date: today, counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0 }, claimed:{} };
+    S.daily = { date: today, counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0, exped:0 }, claimed:{} };
   }
 }
 function track(id, n) {
@@ -898,7 +931,128 @@ function hasClaimables() {
   ensureDaily();
   for (const q of QUESTS) if (!S.daily.claimed[q.id] && S.daily.counts[q.id] >= q.target) return true;
   for (const a of ACHS) if (achClaimable(a)) return true;
+  if (guildReady()) return true;
   return false;
+}
+
+/* ---------- 길드 원정 ---------- */
+function fmtDur(sec){
+  sec = Math.max(0, Math.ceil(sec));
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+  if (h > 0) return h + '시간 ' + m + '분';
+  if (m > 0) return m + '분 ' + s + '초';
+  return s + '초';
+}
+function nowMs(){ return Date.now(); }
+function expedDef(type){ return EXPEDITIONS.find(e => e.id === type); }
+function slotDone(s){ return s && nowMs() >= s.endAt; }
+function guildReady(){ return S.guild.slots.some(slotDone); }
+function expedUnlocked(e){ return S.guild.level >= e.minLv; }
+function freeSlotIndex(){
+  const cnt = guildSlotCount(S.guild.level);
+  for (let i = 0; i < cnt; i++) if (!S.guild.slots[i]) return i;
+  return -1;
+}
+function dispatchExped(type){
+  const e = expedDef(type);
+  if (!e || !expedUnlocked(e)) return;
+  const i = freeSlotIndex();
+  if (i < 0) { toast('빈 원정 슬롯이 없습니다!'); return; }
+  S.guild.slots[i] = { type, endAt: nowMs() + e.dur * 1000 };
+  track('exped');
+  sfx('dia');
+  toast(e.emoji + ' ' + e.name + ' 파견!');
+  renderPanel();
+  saveGame();
+}
+function addGuildExp(n){
+  if (S.guild.level >= GUILD_MAX_LV) return;
+  S.guild.exp += n;
+  while (S.guild.level < GUILD_MAX_LV && S.guild.exp >= guildExpNeed(S.guild.level)) {
+    S.guild.exp -= guildExpNeed(S.guild.level);
+    S.guild.level++;
+    toast('🏰 길드 레벨업! Lv.' + S.guild.level);
+    sfx('epic');
+  }
+  if (S.guild.level >= GUILD_MAX_LV) S.guild.exp = 0;
+}
+function collectExped(i){
+  const s = S.guild.slots[i];
+  if (!slotDone(s)) return;
+  const e = expedDef(s.type);
+  const r = expedReward(e);
+  S.gold += r.gold; S.dia += r.dia;
+  S.guild.slots[i] = null;
+  addGuildExp(r.exp);
+  sfx('win');
+  toast(e.emoji + ' 원정 완료! ' + (r.gold ? '💰' + fmt(r.gold) + ' ' : '') + (r.dia ? '💎' + r.dia + ' ' : '') + '🏰' + r.exp + 'exp');
+  renderPanel();
+  saveGame();
+}
+// 즉시완료 비용: 남은 1분당 💎1 (최소 1)
+function instantCost(s){ return Math.max(1, Math.ceil((s.endAt - nowMs()) / 60000)); }
+function instantExped(i){
+  const s = S.guild.slots[i];
+  if (!s || slotDone(s)) return;
+  const cost = instantCost(s);
+  if (S.dia < cost) { toast('💎 다이아가 부족합니다 (' + cost + ' 필요)'); return; }
+  S.dia -= cost;
+  s.endAt = nowMs();
+  sfx('dia');
+  collectExped(i);
+}
+function guildSectionHtml(){
+  const g = S.guild;
+  const cnt = guildSlotCount(g.level);
+  const active = g.slots.slice(0, cnt).filter(Boolean).length;
+  const maxed = g.level >= GUILD_MAX_LV;
+  const need = guildExpNeed(g.level);
+  const pct = maxed ? 100 : Math.min(100, Math.floor(g.exp / need * 100));
+  let html = '<div class="sectionTitle">🏰 길드 원정 <span style="font-size:10px; color:#c9a25e;">Lv.' + g.level +
+    ' · 슬롯 ' + active + '/' + cnt + ' · 보상 ×' + guildMult().toFixed(2) + '</span></div>';
+  html += '<div class="guildExp"><div class="guildExpFill" style="width:' + pct + '%"></div>' +
+    '<span class="guildExpTxt">' + (maxed ? 'MAX' : 'EXP ' + g.exp + '/' + need) + '</span></div>';
+  html += '<div style="font-size:10px; color:#a09078; font-weight:700; margin:2px 0 4px;">전투와 별개로 실시간 진행(오프라인 포함) · 파견 무료</div>';
+
+  // 슬롯 현황 (활성 슬롯만)
+  for (let i = 0; i < cnt; i++) {
+    const s = g.slots[i];
+    if (!s) {
+      html += '<div class="questRow"><div class="questInfo"><div class="questName" style="color:#b0a088;">슬롯 ' + (i+1) + ' · 비어있음</div>' +
+        '<div class="questProg">아래에서 원정을 파견하세요</div></div></div>';
+      continue;
+    }
+    const e = expedDef(s.type);
+    const r = expedReward(e);
+    const reward = (r.gold ? '💰' + fmt(r.gold) + ' ' : '') + (r.dia ? '💎' + r.dia + ' ' : '') + '🏰' + r.exp;
+    if (slotDone(s)) {
+      html += '<div class="questRow guildReady"><div class="questInfo"><div class="questName">' + e.emoji + ' ' + e.name + ' · 완료!</div>' +
+        '<div class="questProg">' + reward + '</div></div>' +
+        '<button class="claimBtn" data-collect="' + i + '">받기!</button></div>';
+    } else {
+      const left = (s.endAt - nowMs()) / 1000;
+      html += '<div class="questRow"><div class="questInfo"><div class="questName">' + e.emoji + ' ' + e.name + '</div>' +
+        '<div class="questProg">남은 시간 ' + fmtDur(left) + ' · ' + reward + '</div></div>' +
+        '<button class="claimBtn gray" data-instant="' + i + '">⏩ 💎' + instantCost(s) + '</button></div>';
+    }
+  }
+
+  // 원정 메뉴
+  const full = freeSlotIndex() < 0;
+  html += '<div style="font-size:10px; color:#a09078; font-weight:700; margin:6px 0 2px;">원정 파견 (최고 스테이지 ' + S.maxStage + ' 기준 보상)</div>';
+  for (const e of EXPEDITIONS) {
+    const r = expedReward(e);
+    const unlocked = expedUnlocked(e);
+    const reward = (r.gold ? '💰' + fmt(r.gold) + ' ' : '') + (r.dia ? '💎' + r.dia + ' ' : '') + '🏰' + e.exp;
+    let btn;
+    if (!unlocked) btn = '<button class="claimBtn" disabled>🔒 Lv.' + e.minLv + '</button>';
+    else if (full) btn = '<button class="claimBtn" disabled>슬롯 가득</button>';
+    else btn = '<button class="claimBtn" data-disp="' + e.id + '">파견!</button>';
+    html += '<div class="questRow"><div class="questInfo"><div class="questName">' + e.emoji + ' ' + e.name +
+      ' <span style="color:#8a7a68; font-size:10px;">' + fmtDur(e.dur) + '</span></div>' +
+      '<div class="questProg">' + reward + '</div></div>' + btn + '</div>';
+  }
+  return html;
 }
 
 /* ---------- 전투 ---------- */
@@ -1541,7 +1695,9 @@ function buyRelic(id) {
 /* ---------- 환생 ---------- */
 function sporeGain() {
   if (S.maxStage < 40) return 0;
-  return Math.floor((S.maxStage - 30) * 1.2);
+  // 깊이 초선형 보정(×(1+maxStage/300)): 선형 영구보너스 vs 지수 난이도의 한계가치 둔화를 상쇄해
+  // 환생당 진행이 음수로 꺾이지 않게 한다. 지수 난이도가 폭주를 막는 거버너.
+  return Math.floor((S.maxStage - 30) * 1.2 * (1 + S.maxStage / 300));
 }
 function doPrestige() {
   const gain = sporeGain();
@@ -1550,7 +1706,7 @@ function doPrestige() {
     { label:'환생!', cb: ()=>{
         const keep = {
           dia:S.dia, pets:S.pets, petStars:S.petStars, codex:S.codex, relics:S.relics,
-          job:S.job, jobTier:S.jobTier, tower:S.tower, skillAwk:S.skillAwk,
+          job:S.job, jobTier:S.jobTier, tower:S.tower, skillAwk:S.skillAwk, guild:S.guild,
           spores:S.spores + gain,
           life:S.life, daily:S.daily, achLv:S.achLv, settings:S.settings,
         };
@@ -1785,7 +1941,8 @@ function renderPanel() {
     const dgCan = dgUsed < DUNGEON_DAILY;
     const ddUsed = S.daily.counts.diadungeon;
     const ddCan = ddUsed < DIA_DUNGEON_DAILY;
-    let html = '<div class="sectionTitle">⚔️ 던전</div>' +
+    let html = guildSectionHtml();
+    html += '<div class="sectionTitle">⚔️ 던전</div>' +
       '<div class="questRow"><div class="questInfo"><div class="questName">💰 골드 던전</div>' +
       '<div class="questProg">' + DUNGEON_TIME + '초 동안 골드 몬스터 사냥 · 오늘 ' + dgUsed + '/' + DUNGEON_DAILY + '회</div></div>' +
       '<button class="claimBtn" id="dungeonBtn" ' + (dgCan ? '' : 'disabled') + '>' + (dgCan ? '입장!' : '내일 다시') + '</button></div>' +
@@ -1838,6 +1995,9 @@ function renderPanel() {
       '<div style="font-size:10px; color:#b0a088; margin-top:6px;">누적 처치 ' + fmt(S.life.kills) + ' · 보스 ' + fmt(S.life.bossKills) + ' · 환생 ' + S.life.rebirths + '회' +
       '<br>📈 오프라인 효율 ' + Math.round(offlineEff()*100) + '%' + (offlineEff() >= 1 ? ' 💯' : '/100%') + ' · 보상 캡 ' + (offlineCapSec()/3600) + '시간</div>';
     p.innerHTML = html;
+    p.querySelectorAll('[data-disp]').forEach(b => b.addEventListener('click', ()=>dispatchExped(b.dataset.disp)));
+    p.querySelectorAll('[data-collect]').forEach(b => b.addEventListener('click', ()=>collectExped(+b.dataset.collect)));
+    p.querySelectorAll('[data-instant]').forEach(b => b.addEventListener('click', ()=>instantExped(+b.dataset.instant)));
     $('dungeonBtn').addEventListener('click', ()=>enterDungeon('gold'));
     $('diaDungeonBtn').addEventListener('click', ()=>enterDungeon('dia'));
     $('towerBtn').addEventListener('click', startTower);
@@ -1895,7 +2055,16 @@ function mergeState(data) {
   S.relics = Object.assign({gold:0,atk:0,hp:0,time:0,critdmg:0}, data.relics);
   S.life = Object.assign({kills:0,bossKills:0,pulls:0,sporesEarned:0,rebirths:0,bestStage:1}, data.life);
   S.daily = Object.assign({date:'',counts:{kills:0,pulls:0,ups:0,boss:0},claimed:{}}, data.daily);
-  S.daily.counts = Object.assign({kills:0,pulls:0,ups:0,boss:0,dungeon:0,diadungeon:0,tower:0}, S.daily.counts);
+  S.daily.counts = Object.assign({kills:0,pulls:0,ups:0,boss:0,dungeon:0,diadungeon:0,tower:0,exped:0}, S.daily.counts);
+  S.guild = Object.assign({level:1, exp:0, slots:[null,null,null,null]}, data.guild);
+  if (!Array.isArray(S.guild.slots)) S.guild.slots = [null,null,null,null];
+  S.guild.slots = S.guild.slots.slice(0, GUILD_SLOT_MAX);
+  while (S.guild.slots.length < GUILD_SLOT_MAX) S.guild.slots.push(null);
+  // 손상 슬롯 방어: 유효한 원정 타입 + 숫자 endAt 아니면 비움
+  S.guild.slots = S.guild.slots.map(s =>
+    (s && EXPEDITIONS.some(e => e.id === s.type) && typeof s.endAt === 'number') ? { type:s.type, endAt:s.endAt } : null);
+  S.guild.level = Math.max(1, Math.min(GUILD_MAX_LV, Math.floor(S.guild.level) || 1));
+  S.guild.exp = Math.max(0, Math.floor(S.guild.exp) || 0);
   S.achLv = data.achLv || {};
   S.settings = Object.assign({sound:true,autoPull:false,autoEnh:false}, data.settings);
   S.job = data.job || null;

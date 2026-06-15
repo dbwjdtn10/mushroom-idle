@@ -122,7 +122,8 @@ check('마이그레이션: enhance 보존', S.enhance[slotKey] === before + 3);
 
 // 7) 환생 — 모달 버튼 클릭 시뮬레이션
 S.maxStage = 45;
-const expectedSpores = Math.floor((45 - 30) * 1.2);
+const expectedSpores = sporeGain();   // 공식 변경에 견고하도록 직접 호출
+check('환생: 용비늘 획득량 공식(깊이 초선형)', expectedSpores === Math.floor(15 * 1.2 * (1 + 45/300)), 'gain=' + expectedSpores);
 doPrestige();
 const modalBtns = els['modalBtns'].children;
 const sporesEarnedBefore = S.life.sporesEarned;
@@ -386,6 +387,96 @@ els['modalBtns'].children[0].click();
 els['modalBtns'].children[0].click();
 check('오프라인: 보상 1회 지급 + 수치 일치', Math.abs((S.gold - goldOffB2) - expOff2) <= expOff2 * 0.01 + 2, '+' + fmt(S.gold - goldOffB2));
 S.relics.time = tB2; S.life.rebirths = rB2; S.tower = twB2;
+
+// ===== 길드 원정 =====
+
+// 38) 기본 상태 + 슬롯 수 곡선
+check('길드: 초기 Lv.1 슬롯 1개', S.guild.level === 1 && guildSlotCount(1) === 1);
+check('길드: 슬롯 곡선 (4레벨당 +1, 최대 4)', guildSlotCount(5) === 2 && guildSlotCount(13) === 4 && guildSlotCount(99) === 4);
+
+// 39) 파견 — 빈 슬롯에 들어가고 일일 카운트 + endAt 미래
+S.daily.counts.exped = 0;
+S.guild.slots = [null,null,null,null];
+dispatchExped('patrol');
+check('길드: 파견 시 슬롯 점유', S.guild.slots[0] && S.guild.slots[0].type === 'patrol', 'slot0=' + (S.guild.slots[0]&&S.guild.slots[0].type));
+check('길드: 파견 일일 퀘스트 트래킹', S.daily.counts.exped === 1);
+check('길드: endAt 미래값', S.guild.slots[0].endAt > Date.now());
+
+// 40) 슬롯 가득 시 추가 파견 거부 (Lv.1은 슬롯 1개)
+dispatchExped('hunt');
+check('길드: 슬롯 1개 초과 파견 거부', S.guild.slots[1] === null);
+
+// 41) 잠긴 원정(relic minLv4) 파견 거부
+S.guild.slots = [null,null,null,null]; S.guild.level = 1;
+dispatchExped('relic');
+check('길드: 미해금 원정 거부', S.guild.slots.every(s => s === null));
+
+// 42) 완료 + 수령 — 보상 지급 + exp 적립, slotDone 판정
+S.guild.level = 5; // 슬롯 2개
+S.guild.slots = [null,null,null,null];
+S.maxStage = 100;
+dispatchExped('patrol');
+S.guild.slots[0].endAt = Date.now() - 1000; // 강제 완료
+check('길드: 완료 판정', guildReady() === true);
+const eP = EXPEDITIONS.find(e=>e.id==='patrol');
+const rP = expedReward(eP);
+const goldGB = S.gold, expGB = S.guild.exp;
+collectExped(0);
+check('길드: 수령 시 골드 지급', S.gold === goldGB + rP.gold && rP.gold > 0, '+' + fmt(rP.gold));
+check('길드: 수령 시 슬롯 비움', S.guild.slots[0] === null);
+check('길드: 수령 시 exp 적립', S.guild.exp === expGB + rP.exp);
+
+// 43) 보상 진행도 연동 — maxStage 높을수록 골드 보상 증가
+S.maxStage = 50;  const r50 = expedReward(eP).gold;
+S.maxStage = 200; const r200 = expedReward(eP).gold;
+check('길드: 보상 진행도 연동', r200 > r50, fmt(r50) + ' → ' + fmt(r200));
+
+// 44) 즉시완료 — 다이아 차감 + 즉시 수령 (남은 1분당 💎1)
+S.guild.level = 5; S.guild.slots = [null,null,null,null]; S.maxStage = 100;
+dispatchExped('hunt');
+const sH = S.guild.slots[0];
+const cost = Math.max(1, Math.ceil((sH.endAt - Date.now())/60000));
+S.dia = cost + 50;
+const diaIB = S.dia, goldIB = S.gold;
+const rH = expedReward(EXPEDITIONS.find(e=>e.id==='hunt'));
+instantExped(0);
+check('길드: 즉시완료 다이아 차감', S.dia === diaIB - cost + rH.dia, 'cost=' + cost + ' 보상dia=' + rH.dia);
+check('길드: 즉시완료 후 수령됨', S.guild.slots[0] === null && S.gold === goldIB + rH.gold);
+
+// 45) 즉시완료 다이아 부족 시 거부
+S.guild.slots = [null,null,null,null];
+dispatchExped('hunt');
+S.dia = 0;
+instantExped(0);
+check('길드: 다이아 부족 시 즉시완료 거부', S.guild.slots[0] && !slotDone(S.guild.slots[0]));
+
+// 46) 레벨업 — 임계치 도달 시 레벨 상승 + 잔여 exp 이월
+S.guild.level = 1; S.guild.exp = 0;
+addGuildExp(guildExpNeed(1) + 5);
+check('길드: 레벨업 + exp 이월', S.guild.level === 2 && S.guild.exp === 5, 'lv=' + S.guild.level + ' exp=' + S.guild.exp);
+S.guild.level = GUILD_MAX_LV; S.guild.exp = 0;
+addGuildExp(99999);
+check('길드: 최대 레벨 상한', S.guild.level === GUILD_MAX_LV && S.guild.exp === 0);
+
+// 47) 환생 유지 — guild가 keep 목록에 포함
+S.guild.level = 7; S.guild.exp = 33;
+S.guild.slots = [null,null,null,null];
+dispatchExped('patrol');
+S.maxStage = 45;
+doPrestige();
+els['modalBtns'].children[0].click();
+check('길드: 환생 후 레벨/슬롯 유지', S.guild.level === 7 && S.guild.exp === 33 && S.guild.slots[0] && S.guild.slots[0].type === 'patrol');
+
+// 48) 저장/로드 왕복 + 손상 슬롯 방어
+saveGame();
+const savedG = JSON.parse(localStorage.getItem('mushroomIdleSave_v2'));
+check('길드: 저장 직렬화', savedG.guild && savedG.guild.level === 7 && Array.isArray(savedG.guild.slots));
+const corrupt = JSON.parse(JSON.stringify(S));
+corrupt.guild.slots = [{type:'nonexistent', endAt:123}, {type:'patrol'}, null, null];
+corrupt.guild.level = 999;
+mergeState(corrupt);
+check('길드: 손상 슬롯 정화', S.guild.slots[0] === null && S.guild.slots[1] === null, JSON.stringify(S.guild.slots.map(s=>s&&s.type)));
+check('길드: 레벨 상한 클램프', S.guild.level === GUILD_MAX_LV);
 `;
 
 (0, eval)(src + body);
