@@ -477,6 +477,69 @@ corrupt.guild.level = 999;
 mergeState(corrupt);
 check('길드: 손상 슬롯 정화', S.guild.slots[0] === null && S.guild.slots[1] === null, JSON.stringify(S.guild.slots.map(s=>s&&s.type)));
 check('길드: 레벨 상한 클램프', S.guild.level === GUILD_MAX_LV);
+
+// ===== 용혼 (2차 프레스티지) =====
+
+// 49) 임계값 공식 — 시작 미만 0, 이후 STEP당 +1
+check('용혼: 임계값 미만 0', soulTotalFor(SOUL_START - 1) === 0);
+check('용혼: STEP당 +1', soulTotalFor(SOUL_START + SOUL_STEP*3 + 5) === 3, 'total=' + soulTotalFor(SOUL_START + SOUL_STEP*3 + 5));
+
+// 50) 환생 시 새 깊이만큼 용혼 지급
+S.souls = 0; S.life.soulsEarned = 0; S.soulTree = {atk:0,hp:0,gold:0};
+S.life.bestStage = SOUL_START + SOUL_STEP*5;   // 5 용혼치 깊이
+S.maxStage = 45;   // 환생 가능
+const sgExp = soulGain();
+check('용혼: soulGain = 미수령 깊이분', sgExp === 5, 'gain=' + sgExp);
+doPrestige();
+els['modalBtns'].children[0].click();
+check('용혼: 환생 시 지급', S.souls === 5 && S.life.soulsEarned === 5, 'souls=' + S.souls);
+
+// 51) exploit-proof — 같은 벽에서 재환생 시 추가 용혼 0
+S.life.bestStage = SOUL_START + SOUL_STEP*5;  // 깊이 그대로
+S.maxStage = 45;
+check('용혼: 같은 깊이 재환생 → 0 (treadmill 차단)', soulGain() === 0);
+doPrestige(); els['modalBtns'].children[0].click();
+check('용혼: 같은 벽 farming 불가', S.souls === 5 && S.life.soulsEarned === 5);
+
+// 52) 더 깊이 가면 차액만 지급
+S.life.bestStage = SOUL_START + SOUL_STEP*8;  // +3 깊이
+S.maxStage = 45;
+check('용혼: 새 깊이 차액', soulGain() === 3);
+doPrestige(); els['modalBtns'].children[0].click();
+check('용혼: 누적 8', S.souls === 8 && S.life.soulsEarned === 8);
+
+// 53) 곱연산 강화 구매 — 비용 차감 + atk 곱연산 반영
+recalcStats(); const atkPreSoul = stats.atk;
+const costAtk = soulCost(SOUL_NODES.find(n=>n.id==='atk'));
+buySoulNode('atk');
+check('용혼: 노드 구매 비용 차감', S.souls === 8 - costAtk && S.soulTree.atk === 1, 'souls=' + S.souls);
+check('용혼: 공격 ×1.2 반영', Math.abs(stats.atk / atkPreSoul - 1.2) < 1e-6, 'ratio=' + (stats.atk/atkPreSoul).toFixed(3));
+
+// 54) 골드 노드 → goldMult 반영
+const goldPreSoul = stats.goldMult;
+buySoulNode('gold');
+check('용혼: 골드 ×1.25 반영', Math.abs(stats.goldMult / goldPreSoul - 1.25) < 1e-6, 'ratio=' + (stats.goldMult/goldPreSoul).toFixed(3));
+
+// 55) 용혼 부족 시 구매 거부
+S.souls = 0;
+const treeBefore = S.soulTree.hp;
+buySoulNode('hp');
+check('용혼: 부족 시 구매 거부', S.soulTree.hp === treeBefore && S.souls === 0);
+
+// 56) 환생 유지 — 용혼/트리 보존
+S.souls = 7; S.soulTree = {atk:3,hp:1,gold:2};
+S.maxStage = 45; S.life.bestStage = SOUL_START + SOUL_STEP*8;  // 추가 깊이 없음
+doPrestige(); els['modalBtns'].children[0].click();
+check('용혼: 환생 후 트리 유지', S.soulTree.atk === 3 && S.soulTree.hp === 1 && S.soulTree.gold === 2 && S.souls === 7);
+
+// 57) 저장/로드 왕복 + 정규화
+saveGame();
+const savedS = JSON.parse(localStorage.getItem('mushroomIdleSave_v2'));
+check('용혼: 저장 직렬화', savedS.souls === 7 && savedS.soulTree.atk === 3 && typeof savedS.life.soulsEarned === 'number');
+const corruptS = JSON.parse(JSON.stringify(S));
+corruptS.souls = -5; corruptS.soulTree = { atk: 2.7, hp: 'x', gold: 1 };
+mergeState(corruptS);
+check('용혼: 손상값 정규화', S.souls === 0 && S.soulTree.atk === 2 && S.soulTree.hp === 0 && S.soulTree.gold === 1, JSON.stringify(S.soulTree)+' souls='+S.souls);
 `;
 
 (0, eval)(src + body);

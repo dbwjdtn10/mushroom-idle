@@ -146,6 +146,9 @@ function eachMinute(min) {
     }
   });
 
+  // 용혼: 가장 싼 노드부터 구매 (모든 페르소나)
+  act('용혼 강화', () => { let g = 0; while (g++ < 8) { const n = SOUL_NODES.slice().sort((a,b)=>soulCost(a)-soulCost(b))[0]; if (S.souls >= soulCost(n)) buySoulNode(n.id); else break; } });
+
   if (persona === 'idle') {
     S.settings.autoPull = true;
     S.settings.autoEnh = true;
@@ -208,6 +211,8 @@ function checkInvariants(min) {
   inv('길드 레벨 비정상', S.guild.level >= 1 && S.guild.level <= 30, String(S.guild.level));
   inv('길드 슬롯 손상', S.guild.slots.length === 4 && S.guild.slots.every(s => !s || EXPEDITIONS.some(e => e.id === s.type)));
   inv('길드 슬롯 한도 초과', S.guild.slots.slice(guildSlotCount(S.guild.level)).every(s => !s), '활성=' + guildSlotCount(S.guild.level));
+  inv('용혼 비정상', Number.isFinite(S.souls) && S.souls >= 0 && Object.values(S.soulTree).every(v => Number.isInteger(v) && v >= 0), 'souls=' + S.souls);
+  inv('용혼 초과지급', S.life.soulsEarned <= soulTotalFor(S.life.bestStage), 'earned=' + S.life.soulsEarned + ' max=' + soulTotalFor(S.life.bestStage));
   inv('동시 모드 충돌', [dungeonLeft, trialLeft, towerLeft].filter(v => v > 0).length <= 1,
     'dg=' + dungeonLeft.toFixed(1) + ' tr=' + trialLeft.toFixed(1) + ' tw=' + towerLeft.toFixed(1));
 }
@@ -234,6 +239,7 @@ report('=== [' + persona + '] 최종 리포트 (' + HOURS + '시간) ===');
 report('진행: maxStage=' + S.maxStage + ', lv=' + S.level + ', 탑 ' + S.tower + '층, 전직 ' + (S.job || '없음') + ' ' + S.jobTier + '차, 환생 ' + S.life.rebirths + '회');
 report('행동: 탭 ' + taps + ' · 황금버섯 ' + goldens + ' · 펫뽑기 ' + petPullCnt + ' · 누적처치 ' + fmt(S.life.kills));
 report('길드: Lv.' + S.guild.level + ' · 원정 완료 ' + expedDone + '회 · 슬롯 ' + guildSlotCount(S.guild.level) + '개');
+report('용혼: 누적 ' + S.life.soulsEarned + ' · 보유 ' + S.souls + ' · 트리 atk' + S.soulTree.atk + '/hp' + S.soulTree.hp + '/gold' + S.soulTree.gold + ' · 곱연산 ×' + (Math.pow(1.2,S.soulTree.atk)*Math.pow(1.2,S.soulTree.hp)*Math.pow(1.25,S.soulTree.gold)).toFixed(2));
 report('재화: 💰' + fmt(S.gold) + ' 💎' + Math.floor(S.dia) + ' 🌀' + S.spores + ' · 도감 ' + Object.keys(S.codex.mobs).length + '/' + MONSTERS.length + '몹 ' + Object.keys(S.codex.bosses).length + '/' + BOSSES.length + '보스');
 report('이슈: ' + (issues.length ? issues.length + '건' : '없음'));
 issues.slice(0, 15).forEach(i => report('  ⚠️ ' + i));

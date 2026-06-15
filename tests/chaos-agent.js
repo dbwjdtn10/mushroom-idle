@@ -177,6 +177,20 @@ S.guild.slots = [null,null,null,null]; dispatchExped('hunt'); S.dia = 0;
 instantExped(0);
 expectT('길드 다이아 0 즉시완료 → 차감 없음·미수령', S.dia === 0 && S.guild.slots[0] && S.guild.slots[0].type === 'hunt');
 
+// [E12] 용혼 같은 벽 farming → 추가 지급 0 (treadmill 차단)
+S.souls = 0; S.life.soulsEarned = 0; S.soulTree = {atk:0,hp:0,gold:0};
+S.life.bestStage = SOUL_START + SOUL_STEP*4; S.maxStage = 45;
+doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click();
+const soulsAfter1 = S.souls;
+S.maxStage = 45;  // 같은 깊이로 재환생 N회
+for (let k = 0; k < 5; k++) { doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click(); S.maxStage = 45; }
+expectT('용혼 같은 벽 5회 재환생 → farming 불가', S.souls === soulsAfter1 && S.life.soulsEarned === 4, 'souls=' + S.souls + ' earned=' + S.life.soulsEarned);
+
+// [E13] 용혼 노드 구매 연타 → 음수/초과 방지
+S.souls = 2;
+buySoulNode('atk'); buySoulNode('atk'); buySoulNode('atk');  // 비용 1,2,... → 2용혼으로 1레벨만
+expectT('용혼 노드 연타 → 보유 한도 내', S.souls >= 0 && S.soulTree.atk === 1, 'souls=' + S.souls + ' atk=' + S.soulTree.atk);
+
 report('통과 ' + passesX.length + ' / 실패 ' + failsX.length);
 passesX.forEach(p => report('  ✅ ' + p));
 failsX.forEach(f => report('  ❌ ' + f));
@@ -200,6 +214,7 @@ const ACTIONS = [
   () => claimQuest(pick(['kills','pulls','ups','boss','dungeon','tower','xx'])),
   () => claimAch(pick(['kills','stage','pulls','rebirth','pets','enh','job','tower','xx'])),
   () => buyRelic(pick(['gold','atk','hp','time','critdmg','xx'])),
+  () => buySoulNode(pick(['atk','hp','gold','xx'])),
   () => dispatchExped(pick(['patrol','hunt','relic','nest','xx'])),
   () => { const i = Math.floor(rng()*4); if (slotDone(S.guild.slots[i])) collectExped(i); else if (S.guild.slots[i]) instantExped(i); },
   () => { const i = Math.floor(rng()*4); const s = S.guild.slots[i]; if (s && rng() < 0.3) s.endAt = Date.now() - 1000; },  // 가끔 강제 완료
@@ -233,6 +248,9 @@ for (let min = 0; min < 90; min++) {
   if (S.jobTier < 0 || S.jobTier > 4) bad.push('jobTier=' + S.jobTier);
   if (S.guild.level < 1 || S.guild.level > 30) bad.push('길드레벨=' + S.guild.level);
   if (S.guild.slots.length !== 4 || S.guild.slots.some(s => s && !EXPEDITIONS.some(e => e.id === s.type))) bad.push('길드슬롯손상');
+  if (!Number.isFinite(S.souls) || S.souls < 0) bad.push('용혼=' + S.souls);
+  if (Object.values(S.soulTree).some(v => !Number.isInteger(v) || v < 0)) bad.push('용혼트리손상');
+  if (S.life.soulsEarned > soulTotalFor(S.life.bestStage)) bad.push('용혼초과지급');
   if (bad.length) chaosIssues.push('[' + min + '분] ' + bad.join(', '));
 }
 report('진행: stage=' + S.maxStage + ' lv=' + S.level + ' 🗼' + S.tower + ' 환생' + S.life.rebirths + ' 💎' + Math.floor(S.dia));

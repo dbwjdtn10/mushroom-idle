@@ -60,6 +60,9 @@ function greedy() {
   for (const sk of SKILLS) if (S.level >= sk.unlock && S.gold >= skillUpCost(sk)*4) buySkillUp(sk.id);
   for (const s of SLOTS) if (S.equip[s.key] && S.gold >= enhCost(s.key)*5) buyEnhance(s.key);
   for (const r of RELICS) if (S.spores >= relicCost(r)) buyRelic(r.id);
+  // 용혼: 가장 싼 노드부터 살 수 있으면 구매 (균형 분배)
+  let sg = 0;
+  while (sg++ < 10) { const n = SOUL_NODES.slice().sort((a,b)=>soulCost(a)-soulCost(b))[0]; if (S.souls >= soulCost(n)) buySoulNode(n.id); else break; }
   while (S.gold >= pull10Cost() * 2) doPulls(10);
   if (S.farm) { S.farm = false; S.kills = 0; player.hp = player.maxHp; spawnMonster(); }   // 보스벽 즉시 재도전
 }
@@ -113,7 +116,9 @@ for (const r of rebirths) {
   );
 }
 report('');
+const soulM = Math.pow(1.2, S.soulTree.atk) * Math.pow(1.2, S.soulTree.hp) * Math.pow(1.25, S.soulTree.gold);
 report('총 환생 ' + rebirths.length + '회 · 최종 maxStage ' + S.maxStage + ' · 최종 누적용비늘 ' + S.life.sporesEarned + ' · 최종 영구배율 ×' + (1+S.life.sporesEarned*0.02).toFixed(1));
+report('🐉 용혼: 누적 ' + S.life.soulsEarned + ' · 보유 ' + S.souls + ' · 트리 atk' + S.soulTree.atk + '/hp' + S.soulTree.hp + '/gold' + S.soulTree.gold + ' · 곱연산 ×' + soulM.toFixed(2));
 if (rebirths.length >= 4) {
   const first3 = rebirths.slice(0,3).reduce((a,r)=>a+r.deltaMax,0)/3;
   const last3 = rebirths.slice(-3).reduce((a,r)=>a+r.deltaMax,0)/3;
