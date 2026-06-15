@@ -469,9 +469,11 @@ function expedReward(e){
    후반 둔화를 구조적으로 완화. 영구 유지(환생·모든 초기화 무관). */
 const SOUL_START = 100, SOUL_STEP = 30;   // bestStage 100부터 30스테이지당 용혼 1
 const SOUL_NODES = [
-  { id:'atk',  icon:'🔥', name:'용혼의 분노', per:0.20, desc:'공격력 ×1.20 / Lv' },
-  { id:'hp',   icon:'🛡️', name:'용혼의 비늘', per:0.20, desc:'체력 ×1.20 / Lv' },
-  { id:'gold', icon:'💰', name:'용혼의 탐욕', per:0.25, desc:'골드 획득 ×1.25 / Lv' },
+  { id:'atk',  icon:'🔥', name:'용혼의 분노', desc:'공격력 ×1.20 / Lv',     eff:l=>'×'+Math.pow(1.20,l).toFixed(2) },
+  { id:'hp',   icon:'🛡️', name:'용혼의 비늘', desc:'체력 ×1.20 / Lv',       eff:l=>'×'+Math.pow(1.20,l).toFixed(2) },
+  { id:'gold', icon:'💰', name:'용혼의 탐욕', desc:'골드 획득 ×1.25 / Lv',  eff:l=>'×'+Math.pow(1.25,l).toFixed(2) },
+  { id:'crit', icon:'💥', name:'용혼의 격노', desc:'치명타 피해 +0.6 / Lv',  eff:l=>'+'+(0.6*l).toFixed(1) },
+  { id:'start',icon:'⏩', name:'용혼의 인도', desc:'환생 시작 골드 대폭↑ (복귀 가속) / Lv', eff:l=>l>0?'Lv.'+l:'없음' },
 ];
 function soulTotalFor(bestStage){ return bestStage < SOUL_START ? 0 : Math.floor((bestStage - SOUL_START) / SOUL_STEP); }
 function soulGain(){ return Math.max(0, soulTotalFor(S.life.bestStage) - S.life.soulsEarned); }
@@ -653,7 +655,7 @@ function defaultState() {
     relics: { gold:0, atk:0, hp:0, time:0, critdmg:0 },
     spores: 0,                // 사용 가능한 용비늘 (유물 구매용 — 내부 키는 구버전 호환 위해 spores 유지)
     souls: 0,                 // 사용 가능한 용혼 (2차 프레스티지 화폐)
-    soulTree: { atk:0, hp:0, gold:0 },   // 용혼 곱연산 강화 — 영구 유지
+    soulTree: { atk:0, hp:0, gold:0, crit:0, start:0 },   // 용혼 강화 — 영구 유지
     life: { kills:0, bossKills:0, pulls:0, sporesEarned:0, soulsEarned:0, rebirths:0, bestStage:1 },
     daily: { date:'', counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0, exped:0 }, claimed:{} },
     guild: { level:1, exp:0, slots:[null, null, null, null] },  // 슬롯: {type, endAt(ms)} | null — 환생 유지
@@ -812,7 +814,7 @@ function recalcStats() {
     atk, maxHp,
     aps: (1 + 0.05*S.upgrades.spd) * jobAps,
     crit: 0.05 + 0.01*S.upgrades.crit + jobCrit,
-    critDmg: 2 + 0.1*S.relics.critdmg + pb.critdmg,
+    critDmg: 2 + 0.1*S.relics.critdmg + pb.critdmg + 0.6*(S.soulTree.crit || 0),
     goldMult: (1 + 0.1*S.relics.gold) * (1 + pb.gold) * soulGold,
     skillMult, cdMult, setRank,
     tier: ti,
@@ -1747,7 +1749,10 @@ function doPrestige() {
         keep.life.rebirths++;
         S = Object.assign(defaultState(), keep);
         S.dia = keep.dia; // defaultState의 100과 충돌 방지
-        S.gold += S.life.sporesEarned * 100; // 환생 보너스: 시작 골드
+        // 환생 보너스: 시작 골드 (+ 용혼 '인도' 노드는 진행도 연동 catch-up으로 복귀 가속)
+        S.gold += S.life.sporesEarned * 100;
+        if (S.soulTree.start > 0)
+          S.gold += Math.floor(mobGold(Math.max(1, Math.floor(S.life.bestStage * 0.5))) * S.soulTree.start * 8);
         player = { hp:1, maxHp:1, atkTimer:0 };
         skillCd = {};
         dungeonLeft = 0; dungeonGold = 0; dungeonDia = 0; trialLeft = 0; towerLeft = 0;
@@ -1975,7 +1980,7 @@ function renderPanel() {
       html += '<div class="upRow">' +
         '<div class="upIcon">' + n.icon + '</div>' +
         '<div class="upInfo"><div class="upName">' + n.name + ' <span style="color:#c9a25e">Lv.' + lvl + '</span></div>' +
-        '<div class="upDesc">' + n.desc + ' · 현재 ×' + Math.pow(1+n.per, lvl).toFixed(2) + '</div></div>' +
+        '<div class="upDesc">' + n.desc + ' · 현재 ' + n.eff(lvl) + '</div></div>' +
         '<button class="upBtn purple" data-soul="' + n.id + '" ' + (afford ? '' : 'disabled') + '>🐉 ' + cost + '</button></div>';
     }
     p.innerHTML = html;
@@ -2104,7 +2109,7 @@ function mergeState(data) {
   S.relics = Object.assign({gold:0,atk:0,hp:0,time:0,critdmg:0}, data.relics);
   S.life = Object.assign({kills:0,bossKills:0,pulls:0,sporesEarned:0,soulsEarned:0,rebirths:0,bestStage:1}, data.life);
   S.souls = Math.max(0, Math.floor(data.souls) || 0);
-  S.soulTree = Object.assign({atk:0,hp:0,gold:0}, data.soulTree);
+  S.soulTree = Object.assign({atk:0,hp:0,gold:0,crit:0,start:0}, data.soulTree);
   for (const k in S.soulTree) S.soulTree[k] = Math.max(0, Math.floor(S.soulTree[k]) || 0);
   S.daily = Object.assign({date:'',counts:{kills:0,pulls:0,ups:0,boss:0},claimed:{}}, data.daily);
   S.daily.counts = Object.assign({kills:0,pulls:0,ups:0,boss:0,dungeon:0,diadungeon:0,tower:0,exped:0}, S.daily.counts);

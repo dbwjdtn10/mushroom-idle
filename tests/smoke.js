@@ -520,6 +520,22 @@ const goldPreSoul = stats.goldMult;
 buySoulNode('gold');
 check('용혼: 골드 ×1.25 반영', Math.abs(stats.goldMult / goldPreSoul - 1.25) < 1e-6, 'ratio=' + (stats.goldMult/goldPreSoul).toFixed(3));
 
+// 54b) 격노 노드 → 치명타 피해 +0.6 반영
+S.souls = 5;
+const critPreSoul = stats.critDmg;
+buySoulNode('crit');
+check('용혼: 치명타 피해 +0.6 반영', Math.abs(stats.critDmg - critPreSoul - 0.6) < 1e-6, 'critDmg=' + stats.critDmg.toFixed(2));
+
+// 54c) 인도 노드 → 환생 시작 골드 catch-up (노드 보유 시 시작 골드 증가)
+S.souls = 5; S.soulTree.start = 0; S.life.bestStage = 400;
+S.maxStage = 45; S.stage = 1;
+doPrestige(); els['modalBtns'].children[0].click();
+const startGoldNoNode = S.gold;   // 인도 0Lv 기준 시작 골드
+S.souls = 5; S.life.bestStage = 400; S.maxStage = 45;
+buySoulNode('start');   // 인도 1Lv
+doPrestige(); els['modalBtns'].children[0].click();
+check('용혼: 인도 노드 시작 골드 가속', S.gold > startGoldNoNode && S.soulTree.start === 1, 'node='+S.gold.toFixed(0)+' vs none='+startGoldNoNode.toFixed(0));
+
 // 55) 용혼 부족 시 구매 거부
 S.souls = 0;
 const treeBefore = S.soulTree.hp;
