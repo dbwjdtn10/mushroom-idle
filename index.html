@@ -656,7 +656,7 @@ function defaultState() {
     spores: 0,                // 사용 가능한 용비늘 (유물 구매용 — 내부 키는 구버전 호환 위해 spores 유지)
     souls: 0,                 // 사용 가능한 용혼 (2차 프레스티지 화폐)
     soulTree: { atk:0, hp:0, gold:0, crit:0, start:0 },   // 용혼 강화 — 영구 유지
-    life: { kills:0, bossKills:0, pulls:0, sporesEarned:0, soulsEarned:0, rebirths:0, bestStage:1 },
+    life: { kills:0, bossKills:0, pulls:0, sporesEarned:0, sporeFloor:0, soulsEarned:0, rebirths:0, bestStage:1 },
     daily: { date:'', counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0, exped:0 }, claimed:{} },
     guild: { level:1, exp:0, slots:[null, null, null, null] },  // 슬롯: {type, endAt(ms)} | null — 환생 유지
     achLv: {},                // 업적 id -> 수령한 단계 수
@@ -1740,8 +1740,9 @@ function sporeTotalFor(bestStage) {
 }
 function sporeGain() {
   // 역대 최고치 가드: 현재 run의 maxStage가 아니라 S.life.bestStage(역대 최고) 기준.
-  // 이미 받은 누적분(sporesEarned)을 빼므로 더 깊이 가야만 신규 지급 → 후퇴 환생 농사 차단.
-  return Math.max(0, sporeTotalFor(S.life.bestStage) - S.life.sporesEarned);
+  // 기준선은 sporeFloor(획득 전용). sporesEarned(영구보너스 크기)와 역할 분리 → 부풀려진 베테랑 세이브의
+  // 데드존(신규 0) 없이도 더 깊이 가야만 신규 지급. 신규 플레이어는 sporeFloor==sporesEarned로 거동 불변.
+  return Math.max(0, sporeTotalFor(S.life.bestStage) - S.life.sporeFloor);
 }
 function doPrestige() {
   const gain = sporeGain();
@@ -1756,6 +1757,7 @@ function doPrestige() {
           life:S.life, daily:S.daily, achLv:S.achLv, settings:S.settings,
         };
         keep.life.sporesEarned += gain;
+        keep.life.sporeFloor += gain;   // 획득 기준선도 동기 상승 (gain=total-floor ⟹ floor=total). 신규 플레이어는 둘이 동일 증가.
         keep.life.soulsEarned += sg;
         keep.life.rebirths++;
         S = Object.assign(defaultState(), keep);
@@ -2121,7 +2123,11 @@ function mergeState(data) {
   if (S.codex.mobs['🐲']) { delete S.codex.mobs['🐲']; S.codex.mobs['🐊'] = 1; }
   if (S.codex.bosses['🐉']) { delete S.codex.bosses['🐉']; S.codex.bosses['👁️'] = 1; }
   S.relics = Object.assign({gold:0,atk:0,hp:0,time:0,critdmg:0}, data.relics);
-  S.life = Object.assign({kills:0,bossKills:0,pulls:0,sporesEarned:0,soulsEarned:0,rebirths:0,bestStage:1}, data.life);
+  S.life = Object.assign({kills:0,bossKills:0,pulls:0,sporesEarned:0,sporeFloor:0,soulsEarned:0,rebirths:0,bestStage:1}, data.life);
+  // 베테랑 세이브 마이그레이션: 구버전엔 sporeFloor 없음. 기준선을 현재 역대최고에 맞춰 백필 →
+  // 부풀려진 sporesEarned로 인한 데드존(신규 0)도, 곡선 풀밸류 재지급(과지급)도 방지. sporesEarned는 불변(파워 보존).
+  if (typeof (data.life && data.life.sporeFloor) !== 'number') S.life.sporeFloor = sporeTotalFor(S.life.bestStage);
+  S.life.sporeFloor = Math.max(0, Math.floor(S.life.sporeFloor) || 0);
   S.souls = Math.max(0, Math.floor(data.souls) || 0);
   S.soulTree = Object.assign({atk:0,hp:0,gold:0,crit:0,start:0}, data.soulTree);
   for (const k in S.soulTree) S.soulTree[k] = Math.max(0, Math.floor(S.soulTree[k]) || 0);
@@ -2156,6 +2162,7 @@ function loadGame() {
       S.spores = old.spores || 0;              // + 유물 구매 화폐로도 지급
       S.life.rebirths = old.rebirths || 0;
       S.life.bestStage = old.maxStage || 1;
+      S.life.sporeFloor = sporeTotalFor(S.life.bestStage);   // v1 베테랑도 기준선을 best에 맞춤 (sporesEarned=old.spores는 보너스로 유지)
       saveGame();
       return true;
     }

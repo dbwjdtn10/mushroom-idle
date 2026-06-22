@@ -189,7 +189,7 @@ expectT('용혼 같은 벽 5회 재환생 → farming 불가', S.souls === souls
 // [E12b] 포자 하강 나선 farming → 추가 지급 0 (역대최고치 가드)
 // 버그 재현: stage140으로 재환생→리셋→재등반→또 환생을 반복해도 매번 풀밸류를 받던 트레드밀.
 // 가드 후엔 역대 최고치를 더 갱신해야만 신규 포자가 나온다.
-S.life.sporesEarned = 0; S.spores = 0; S.life.bestStage = 300; S.maxStage = 300;
+S.life.sporesEarned = 0; S.spores = 0; S.life.sporeFloor = 0; S.life.bestStage = 300; S.maxStage = 300;
 doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click();
 const sporesAfterDeep = S.life.sporesEarned;     // sporeTotalFor(300)을 1회 지급
 S.maxStage = 140;  // 후퇴 환생 N회 (역대 최고치 300은 유지)
@@ -261,7 +261,8 @@ for (let min = 0; min < 90; min++) {
   if (!Number.isFinite(S.souls) || S.souls < 0) bad.push('용혼=' + S.souls);
   if (Object.values(S.soulTree).some(v => !Number.isInteger(v) || v < 0)) bad.push('용혼트리손상');
   if (S.life.soulsEarned > soulTotalFor(S.life.bestStage)) bad.push('용혼초과지급');
-  if (S.life.sporesEarned > sporeTotalFor(S.life.bestStage)) bad.push('포자초과지급');
+  // 과지급 불변식은 '획득 기준선' sporeFloor 기준 (sporesEarned는 베테랑 보너스 보존분이라 곡선 초과 가능 = 정상)
+  if (S.life.sporeFloor > sporeTotalFor(S.life.bestStage)) bad.push('포자초과지급');
   if (bad.length) chaosIssues.push('[' + min + '분] ' + bad.join(', '));
 }
 report('진행: stage=' + S.maxStage + ' lv=' + S.level + ' 🗼' + S.tower + ' 환생' + S.life.rebirths + ' 💎' + Math.floor(S.dia));

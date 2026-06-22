@@ -530,13 +530,13 @@ check('용혼: 치명타 피해 +0.6 반영', Math.abs(stats.critDmg - critPreSo
 
 // 54c) 인도 노드 → 환생 시작 골드 catch-up (노드 보유 시 시작 골드 증가)
 // 포자 가드(역대최고치) 도입 후 같은 bestStage로 연속 환생하면 두번째는 gain=0이라 doPrestige가
-// 조기 반환된다. 이 테스트는 '시작 골드' 비교가 목적이므로 매 환생 전 sporesEarned를 초기화해
-// 두 환생이 모두 실행되도록 한다(가드 자체는 chaos/analyze-rebirth가 검증).
-S.souls = 5; S.soulTree.start = 0; S.life.bestStage = 400; S.life.sporesEarned = 0;
+// 조기 반환된다. 이 테스트는 '시작 골드' 비교가 목적이므로 매 환생 전 획득 기준선(sporeFloor)을
+// 초기화해 두 환생이 모두 실행되도록 한다(가드 자체는 chaos/analyze-rebirth가 검증).
+S.souls = 5; S.soulTree.start = 0; S.life.bestStage = 400; S.life.sporesEarned = 0; S.life.sporeFloor = 0;
 S.maxStage = 45; S.stage = 1;
 doPrestige(); els['modalBtns'].children[0].click();
 const startGoldNoNode = S.gold;   // 인도 0Lv 기준 시작 골드
-S.souls = 5; S.life.bestStage = 400; S.maxStage = 45; S.life.sporesEarned = 0;
+S.souls = 5; S.life.bestStage = 400; S.maxStage = 45; S.life.sporesEarned = 0; S.life.sporeFloor = 0;
 buySoulNode('start');   // 인도 1Lv
 doPrestige(); els['modalBtns'].children[0].click();
 check('용혼: 인도 노드 시작 골드 가속', S.gold > startGoldNoNode && S.soulTree.start === 1, 'node='+S.gold.toFixed(0)+' vs none='+startGoldNoNode.toFixed(0));
@@ -561,6 +561,41 @@ const corruptS = JSON.parse(JSON.stringify(S));
 corruptS.souls = -5; corruptS.soulTree = { atk: 2.7, hp: 'x', gold: 1 };
 mergeState(corruptS);
 check('용혼: 손상값 정규화', S.souls === 0 && S.soulTree.atk === 2 && S.soulTree.hp === 0 && S.soulTree.gold === 1, JSON.stringify(S.soulTree)+' souls='+S.souls);
+
+// 58) 베테랑 세이브 데드존 해소 — sporeFloor 신설로 획득 기준선과 영구보너스(sporesEarned) 역할 분리
+// 구버전 베테랑: 풀밸류+무한농사로 sporesEarned가 부풀려졌고 sporeFloor 필드 없음.
+// 마이그레이션은 기준선을 현재 역대최고에 맞춰 백필 → 데드존(신규 0)/과지급 둘 다 방지, 파워(보너스)는 보존.
+const veteran = { life: { sporesEarned: 999999, bestStage: 200 } };   // sporeFloor 없음 = 구버전
+mergeState(veteran);
+check('데드존ⓐ: sporeFloor 백필 = sporeTotalFor(best)', S.life.sporeFloor === sporeTotalFor(200), 'floor='+S.life.sporeFloor+' total='+sporeTotalFor(200));
+check('데드존ⓑ: 현재 best에선 과지급 없음', sporeGain() === 0, 'gain='+sporeGain());
+S.life.bestStage = 250;
+check('데드존ⓒ: 더 깊이 가면 즉시 차액 신규 획득', sporeGain() === sporeTotalFor(250) - sporeTotalFor(200) && sporeGain() > 0, 'gain='+sporeGain());
+check('데드존ⓓ: 영구보너스(sporesEarned) 불변 — 파워 보존', S.life.sporesEarned === 999999, 'earned='+S.life.sporesEarned);
+
+// 59) 신규 플레이어 거동 불변 — fresh defaultState에선 sporeFloor와 sporesEarned가 항상 동기
+S = defaultState();
+recalcStats();
+check('신규불변: 초기 sporeFloor==sporesEarned==0', S.life.sporeFloor === 0 && S.life.sporesEarned === 0);
+S.maxStage = 300; S.stage = 300; S.life.bestStage = 300;   // 정직하게 깊이 도달
+const freshGain = sporeGain();
+check('신규불변: 가드 기준선=floor, full payout', freshGain === sporeTotalFor(300) - S.life.sporeFloor && freshGain > 0, 'gain='+freshGain);
+doPrestige(); els['modalBtns'].children[0].click();
+check('신규불변: 환생 후 floor==earned (동기 유지)', S.life.sporeFloor === S.life.sporesEarned && S.life.sporeFloor === sporeTotalFor(300), 'floor='+S.life.sporeFloor+' earned='+S.life.sporesEarned);
+check('신규불변: 같은 깊이 재환생 gain=0 (트레드밀 차단 유지)', sporeGain() === 0, 'gain='+sporeGain());
+
+// 60) 공식 동등성 — 신규(fresh) 다중 환생 시퀀스에서 새 식(floor 기준)이 구 식(earned 기준)과 항상 일치
+// floor와 earned가 0에서 동일 증가하므로 sporeGain()이 RNG와 무관하게 구 거동과 비트 단위로 같음을 증명.
+S = defaultState();
+let formulaMatch = true;
+for (const depth of [120, 240, 333, 480]) {
+  S.maxStage = depth; S.stage = depth; S.life.bestStage = depth;
+  const newGain = sporeGain();
+  const oldGain = Math.max(0, sporeTotalFor(S.life.bestStage) - S.life.sporesEarned);  // 구 식
+  if (newGain !== oldGain) formulaMatch = false;
+  if (newGain > 0) { doPrestige(); els['modalBtns'].children[0].click(); }
+}
+check('신규불변: 신규 다중환생 내내 신/구 획득식 동일(RNG 무관)', formulaMatch && S.life.sporeFloor === S.life.sporesEarned, 'floor='+S.life.sporeFloor+' earned='+S.life.sporesEarned);
 `;
 
 (0, eval)(src + body);
