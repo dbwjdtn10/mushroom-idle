@@ -1,6 +1,6 @@
 # 🐉 용알 키우기
 
-램프를 문질러 장비를 모으고, 알에서 전설의 용신까지 키우는 모바일 방치형 RPG. 의존성 없는 단일 HTML 파일 게임입니다.
+램프를 문질러 장비를 모으고, 알에서 전설의 용신까지 키우는 모바일 방치형 RPG. 의존성 없는 단일 HTML 파일 게임입니다. 무한의 탑·전직·스킬 각성·🏰 길드 원정(실시간 방치 보상)·🐉 용혼(2차 프레스티지) 등 장기 콘텐츠를 포함합니다.
 
 ## 실행
 
@@ -36,10 +36,11 @@ tests/                테스트 도구 (Node로 실행)
 ## 테스트
 
 ```
-node tests/smoke.js index.html               # 단위 스모크 테스트 (74개 체크)
+node tests/smoke.js index.html               # 단위 스모크 테스트 (100개 체크)
 node tests/player-agent.js index.html active 6   # 플레이어 에이전트 (active|idle|rusher, 시간)
 node tests/chaos-agent.js index.html [시드]   # 이상 유저 에이전트 (익스플로잇 + 랜덤 퍼징)
 node tests/balance.js index.html             # 진행 곡선 시뮬레이션 (4시간)
+node tests/analyze-rebirth.js index.html 14 8  # 환생 곡선 분석 (시간h, 정체기준분) — 환생당 진행·복귀시간 측정
 node tests/make-icons.js                     # PWA 아이콘 재생성
 ```
 

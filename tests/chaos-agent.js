@@ -152,6 +152,55 @@ S.skills.fire = 9;
 awakenSkill('fire'); awakenSkill('fire');
 expectT('각성 이중 구매 방지', S.skillAwk.fire === 1 && S.dia === 5000 - 200, 'dia=' + S.dia);
 
+// [E9] 길드 즉시완료 더블탭 → 다이아 이중 차감/이중 수령?
+S.guild.level = 5; S.guild.slots = [null,null,null,null]; S.maxStage = 100;
+dispatchExped('hunt');
+const sE9 = S.guild.slots[0];
+const costE9 = Math.max(1, Math.ceil((sE9.endAt - Date.now())/60000));
+S.dia = costE9 + 10;
+const diaE9 = S.dia, goldE9 = S.gold;
+const rE9 = (function(e){ const m = 1+0.04*(S.guild.level-1); return { gold:Math.floor(mobGold(S.maxStage)*e.goldMul*m), dia:Math.floor(e.dia*m) }; })(EXPEDITIONS.find(e=>e.id==='hunt'));
+instantExped(0); instantExped(0); instantExped(0);   // 연타
+expectT('길드 즉시완료 연타 → 1회만 차감·수령', S.dia === diaE9 - costE9 + rE9.dia && S.gold === goldE9 + rE9.gold && S.guild.slots[0] === null, 'dia=' + S.dia + ' (기대 ' + (diaE9 - costE9 + rE9.dia) + ')');
+
+// [E10] 완료 슬롯 수령 더블탭 → 이중 보상?
+S.guild.slots = [null,null,null,null];
+dispatchExped('patrol');
+S.guild.slots[0].endAt = Date.now() - 1000;
+const goldE10 = S.gold;
+collectExped(0); collectExped(0);   // 연타
+const rE10 = Math.floor(mobGold(S.maxStage) * EXPEDITIONS[0].goldMul * (1+0.04*(S.guild.level-1)));
+expectT('길드 수령 더블탭 → 1회만 지급', S.gold === goldE10 + rE10 && S.guild.slots[0] === null, '+' + (S.gold - goldE10) + ' (기대 ' + rE10 + ')');
+
+// [E11] 다이아 0으로 즉시완료 시도 → 음수 방지
+S.guild.slots = [null,null,null,null]; dispatchExped('hunt'); S.dia = 0;
+instantExped(0);
+expectT('길드 다이아 0 즉시완료 → 차감 없음·미수령', S.dia === 0 && S.guild.slots[0] && S.guild.slots[0].type === 'hunt');
+
+// [E12] 용혼 같은 벽 farming → 추가 지급 0 (treadmill 차단)
+S.souls = 0; S.life.soulsEarned = 0; S.soulTree = {atk:0,hp:0,gold:0};
+S.life.bestStage = SOUL_START + SOUL_STEP*4; S.maxStage = 45;
+doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click();
+const soulsAfter1 = S.souls;
+S.maxStage = 45;  // 같은 깊이로 재환생 N회
+for (let k = 0; k < 5; k++) { doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click(); S.maxStage = 45; }
+expectT('용혼 같은 벽 5회 재환생 → farming 불가', S.souls === soulsAfter1 && S.life.soulsEarned === 4, 'souls=' + S.souls + ' earned=' + S.life.soulsEarned);
+
+// [E12b] 포자 하강 나선 farming → 추가 지급 0 (역대최고치 가드)
+// 버그 재현: stage140으로 재환생→리셋→재등반→또 환생을 반복해도 매번 풀밸류를 받던 트레드밀.
+// 가드 후엔 역대 최고치를 더 갱신해야만 신규 포자가 나온다.
+S.life.sporesEarned = 0; S.spores = 0; S.life.sporeFloor = 0; S.life.bestStage = 300; S.maxStage = 300;
+doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click();
+const sporesAfterDeep = S.life.sporesEarned;     // sporeTotalFor(300)을 1회 지급
+S.maxStage = 140;  // 후퇴 환생 N회 (역대 최고치 300은 유지)
+for (let k = 0; k < 5; k++) { doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click(); S.maxStage = 140; }
+expectT('포자 후퇴 환생 5회 → farming 불가', S.life.sporesEarned === sporesAfterDeep && sporesAfterDeep > 0, 'earned=' + S.life.sporesEarned + ' (deep=' + sporesAfterDeep + ')');
+
+// [E13] 용혼 노드 구매 연타 → 음수/초과 방지
+S.souls = 2;
+buySoulNode('atk'); buySoulNode('atk'); buySoulNode('atk');  // 비용 1,2,... → 2용혼으로 1레벨만
+expectT('용혼 노드 연타 → 보유 한도 내', S.souls >= 0 && S.soulTree.atk === 1, 'souls=' + S.souls + ' atk=' + S.soulTree.atk);
+
 report('통과 ' + passesX.length + ' / 실패 ' + failsX.length);
 passesX.forEach(p => report('  ✅ ' + p));
 failsX.forEach(f => report('  ❌ ' + f));
@@ -175,6 +224,10 @@ const ACTIONS = [
   () => claimQuest(pick(['kills','pulls','ups','boss','dungeon','tower','xx'])),
   () => claimAch(pick(['kills','stage','pulls','rebirth','pets','enh','job','tower','xx'])),
   () => buyRelic(pick(['gold','atk','hp','time','critdmg','xx'])),
+  () => buySoulNode(pick(['atk','hp','gold','xx'])),
+  () => dispatchExped(pick(['patrol','hunt','relic','nest','xx'])),
+  () => { const i = Math.floor(rng()*4); if (slotDone(S.guild.slots[i])) collectExped(i); else if (S.guild.slots[i]) instantExped(i); },
+  () => { const i = Math.floor(rng()*4); const s = S.guild.slots[i]; if (s && rng() < 0.3) s.endAt = Date.now() - 1000; },  // 가끔 강제 완료
   () => $('retryBossBtn').click(),
   () => { activeTab = pick(['upgrade','skill','equip','pet','prestige','more']); renderPanel(); },
   () => { for (let i = 0; i < 5; i++) $('battle')._handlers.pointerdown[0]({ target:{ closest:()=>null, classList:{ contains:()=>false } }, clientX:0, clientY:0 }); },
@@ -203,6 +256,13 @@ for (let min = 0; min < 90; min++) {
   if (S.tower < prevTowerC) bad.push('탑역행');
   prevTowerC = S.tower;
   if (S.jobTier < 0 || S.jobTier > 4) bad.push('jobTier=' + S.jobTier);
+  if (S.guild.level < 1 || S.guild.level > 30) bad.push('길드레벨=' + S.guild.level);
+  if (S.guild.slots.length !== 4 || S.guild.slots.some(s => s && !EXPEDITIONS.some(e => e.id === s.type))) bad.push('길드슬롯손상');
+  if (!Number.isFinite(S.souls) || S.souls < 0) bad.push('용혼=' + S.souls);
+  if (Object.values(S.soulTree).some(v => !Number.isInteger(v) || v < 0)) bad.push('용혼트리손상');
+  if (S.life.soulsEarned > soulTotalFor(S.life.bestStage)) bad.push('용혼초과지급');
+  // 과지급 불변식은 '획득 기준선' sporeFloor 기준 (sporesEarned는 베테랑 보너스 보존분이라 곡선 초과 가능 = 정상)
+  if (S.life.sporeFloor > sporeTotalFor(S.life.bestStage)) bad.push('포자초과지급');
   if (bad.length) chaosIssues.push('[' + min + '분] ' + bad.join(', '));
 }
 report('진행: stage=' + S.maxStage + ' lv=' + S.level + ' 🗼' + S.tower + ' 환생' + S.life.rebirths + ' 💎' + Math.floor(S.dia));

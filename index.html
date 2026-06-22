@@ -310,6 +310,12 @@
     min-width:70px; cursor:pointer; box-shadow:0 2px 0 #c98e00;
   }
   .claimBtn:disabled { filter:grayscale(.85); opacity:.55; box-shadow:0 2px 0 #999; }
+  .claimBtn.gray { background:linear-gradient(#e8dcc8,#d6c4a6); color:#6b5536; box-shadow:0 2px 0 #b09870; min-width:auto; }
+  .guildExp { position:relative; height:14px; background:#efe3cf; border-radius:7px; overflow:hidden; margin:2px 0; box-shadow:inset 0 1px 2px rgba(0,0,0,.15); }
+  .guildExpFill { height:100%; background:linear-gradient(90deg,#7fc8ff,#4a90d9); transition:width .3s; }
+  .guildExpTxt { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:#3a4a5a; text-shadow:0 1px 1px rgba(255,255,255,.5); }
+  .guildReady { background:linear-gradient(90deg,rgba(255,236,179,.6),rgba(255,224,130,.25)); border-radius:8px; animation:guildPulse 1.4s ease-in-out infinite; }
+  @keyframes guildPulse { 0%,100%{ background-color:rgba(255,236,179,.15); } 50%{ background-color:rgba(255,213,79,.4); } }
   .settingBtn {
     border:none; background:#efe7da; color:#7a5c3e; padding:8px 12px; border-radius:10px;
     font-size:11.5px; font-weight:800; cursor:pointer; margin:3px 3px 3px 0;
@@ -431,6 +437,60 @@ const DIA_DUNGEON_DAILY = 1;
 const TRIAL_TIME = 30;
 const TOWER_TIME = 30;
 const PULLS_PER_LEVEL = 3;
+
+/* ---------- 길드 원정 (실시간·오프라인 병행 진행) ----------
+   전투/던전/탑과 병렬로 백그라운드에서 진행되는 장기 콘텐츠.
+   파견은 무료(시간이 비용) · 보상은 골드(진행도 연동)·다이아(시간제라 가속 불가)·길드 경험치.
+   다이아로 즉시완료 가능(다이아 적체 해소). 길드 레벨 → 동시 슬롯·보상 배율·신규 원정 해금. 환생 유지. */
+const GUILD_MAX_LV = 30;
+const GUILD_SLOT_MAX = 4;
+const EXPEDITIONS = [
+  { id:'patrol', emoji:'🛡️', name:'마을 순찰', dur:10*60,   goldMul:80,   dia:0,  exp:10,  minLv:1 },
+  { id:'hunt',   emoji:'🏹', name:'마수 사냥', dur:45*60,   goldMul:420,  dia:2,  exp:30,  minLv:1 },
+  { id:'relic',  emoji:'🗺️', name:'유적 탐사', dur:3*3600,  goldMul:0,    dia:14, exp:90,  minLv:4 },
+  { id:'nest',   emoji:'🏔️', name:'용의 둥지', dur:8*3600,  goldMul:2400, dia:40, exp:240, minLv:8 },
+];
+function guildSlotCount(lv){ return Math.min(GUILD_SLOT_MAX, 1 + Math.floor((lv-1)/4)); }
+function guildExpNeed(lv){ return 100 * lv; }
+function guildMult(){ return 1 + 0.04 * (S.guild.level - 1); }
+function expedReward(e){
+  const m = guildMult();
+  return {
+    gold: e.goldMul ? Math.floor(mobGold(S.maxStage) * e.goldMul * m) : 0,
+    dia:  e.dia ? Math.floor(e.dia * m) : 0,
+    exp:  e.exp,
+  };
+}
+
+/* ---------- 용혼 (2차 프레스티지) ----------
+   깊은 환생에서만 얻는 희귀 화폐. 곱연산 영구강화 트리에 써서 후반 환생에 복리 성장 루프를 만든다.
+   exploit-proof: 용혼은 '역대 최고 깊이(life.bestStage)'의 함수로만 지급 → 같은 벽에서 환생을 반복해도
+   새 용혼이 안 나옴(앞서 측정으로 확인된 treadmill 익스플로잇 차단). 곱연산이라 선형보너스 vs 지수난이도의
+   후반 둔화를 구조적으로 완화. 영구 유지(환생·모든 초기화 무관). */
+const SOUL_START = 100, SOUL_STEP = 30;   // bestStage 100부터 30스테이지당 용혼 1
+const SOUL_NODES = [
+  { id:'atk',  icon:'🔥', name:'용혼의 분노', desc:'공격력 ×1.20 / Lv',     eff:l=>'×'+Math.pow(1.20,l).toFixed(2) },
+  { id:'hp',   icon:'🛡️', name:'용혼의 비늘', desc:'체력 ×1.20 / Lv',       eff:l=>'×'+Math.pow(1.20,l).toFixed(2) },
+  { id:'gold', icon:'💰', name:'용혼의 탐욕', desc:'골드 획득 ×1.25 / Lv',  eff:l=>'×'+Math.pow(1.25,l).toFixed(2) },
+  { id:'crit', icon:'💥', name:'용혼의 격노', desc:'치명타 피해 +0.6 / Lv',  eff:l=>'+'+(0.6*l).toFixed(1) },
+  { id:'start',icon:'⏩', name:'용혼의 인도', desc:'환생 시작 골드 대폭↑ (복귀 가속) / Lv', eff:l=>l>0?'Lv.'+l:'없음' },
+];
+function soulTotalFor(bestStage){ return bestStage < SOUL_START ? 0 : Math.floor((bestStage - SOUL_START) / SOUL_STEP); }
+function soulGain(){ return Math.max(0, soulTotalFor(S.life.bestStage) - S.life.soulsEarned); }
+function soulCost(node){ return (S.soulTree[node.id] || 0) + 1; }   // Lv당 1,2,3,... (용혼은 희귀)
+function soulMult(id, per){ return Math.pow(1 + per, S.soulTree[id] || 0); }
+function buySoulNode(id){
+  const node = SOUL_NODES.find(n => n.id === id);
+  if (!node) return;
+  const cost = soulCost(node);
+  if (S.souls < cost) { toast('🐉 용혼이 부족합니다 (' + cost + ' 필요)'); return; }
+  S.souls -= cost;
+  S.soulTree[id] = (S.soulTree[id] || 0) + 1;
+  sfx('epic');
+  recalcStats();
+  renderPanel();
+  saveGame();
+}
 
 const SLOTS = [
   { key:'weapon', name:'무기',   icon:'⚔️', type:'atk' },
@@ -556,6 +616,7 @@ const QUESTS = [
   { id:'boss',  name:'보스 1회 처치',       target:1,   reward:40 },
   { id:'dungeon', name:'골드 던전 1회 입장', target:1,  reward:25 },
   { id:'tower',   name:'무한의 탑 1층 등반', target:1,  reward:20 },
+  { id:'exped',   name:'길드 원정 1회 파견', target:1,  reward:25 },
 ];
 
 const ACHS = [
@@ -567,6 +628,7 @@ const ACHS = [
   { id:'enh',     name:'대장장이',   desc:'장비 강화 합계', tiers:[10,40,120,300],         rewards:[30,80,200,500],  stat:()=>Object.values(S.enhance).reduce((a,b)=>a+b,0) },
   { id:'job',     name:'전직의 길',  desc:'전직 차수',     tiers:[1,2,3,4],               rewards:[50,100,200,400], stat:()=>S.jobTier },
   { id:'tower',   name:'탑 등반가',  desc:'무한의 탑 층수', tiers:[10,30,60,100],          rewards:[40,100,250,600], stat:()=>S.tower },
+  { id:'guild',   name:'길드 마스터', desc:'길드 레벨',     tiers:[3,8,15,25],             rewards:[40,100,250,600], stat:()=>S.guild.level },
 ];
 
 /* ---------- 상태 ---------- */
@@ -592,8 +654,11 @@ function defaultState() {
     codex: { mobs:{}, bosses:{}, rarities:{} },
     relics: { gold:0, atk:0, hp:0, time:0, critdmg:0 },
     spores: 0,                // 사용 가능한 용비늘 (유물 구매용 — 내부 키는 구버전 호환 위해 spores 유지)
-    life: { kills:0, bossKills:0, pulls:0, sporesEarned:0, rebirths:0, bestStage:1 },
-    daily: { date:'', counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0 }, claimed:{} },
+    souls: 0,                 // 사용 가능한 용혼 (2차 프레스티지 화폐)
+    soulTree: { atk:0, hp:0, gold:0, crit:0, start:0 },   // 용혼 강화 — 영구 유지
+    life: { kills:0, bossKills:0, pulls:0, sporesEarned:0, sporeFloor:0, soulsEarned:0, rebirths:0, bestStage:1 },
+    daily: { date:'', counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0, exped:0 }, claimed:{} },
+    guild: { level:1, exp:0, slots:[null, null, null, null] },  // 슬롯: {type, endAt(ms)} | null — 환생 유지
     achLv: {},                // 업적 id -> 수령한 단계 수
     settings: { sound:true, autoPull:false, autoEnh:false },
     farm: false,
@@ -740,16 +805,17 @@ function recalcStats() {
   if (S.job === 'warrior') jobAtk = 1 + 0.25*S.jobTier;
   else if (S.job === 'archer') { jobAps = 1 + 0.08*S.jobTier; jobCrit = 0.04*S.jobTier; }
   else if (S.job === 'mage') { skillMult = 1 + 0.4*S.jobTier; cdMult = Math.max(0.6, 1 - 0.06*S.jobTier); }
-  const atkMult = (1 + 0.08*S.upgrades.atk) * (1 + 0.05*S.relics.atk) * (1 + pb.atk) * sporeMult * codexMult * jobAtk * setMult;
-  const hpMult  = (1 + 0.08*S.upgrades.hp)  * (1 + 0.05*S.relics.hp)  * (1 + pb.hp)  * sporeMult * codexMult * setMult;
+  const soulAtk = soulMult('atk', 0.20), soulHp = soulMult('hp', 0.20), soulGold = soulMult('gold', 0.25);
+  const atkMult = (1 + 0.08*S.upgrades.atk) * (1 + 0.05*S.relics.atk) * (1 + pb.atk) * sporeMult * codexMult * jobAtk * setMult * soulAtk;
+  const hpMult  = (1 + 0.08*S.upgrades.hp)  * (1 + 0.05*S.relics.hp)  * (1 + pb.hp)  * sporeMult * codexMult * setMult * soulHp;
   const atk   = ((8 + S.level*4) * tm + ea) * atkMult;
   const maxHp = ((100 + S.level*25) * tm + eh) * hpMult;
   stats = {
     atk, maxHp,
     aps: (1 + 0.05*S.upgrades.spd) * jobAps,
     crit: 0.05 + 0.01*S.upgrades.crit + jobCrit,
-    critDmg: 2 + 0.1*S.relics.critdmg + pb.critdmg,
-    goldMult: (1 + 0.1*S.relics.gold) * (1 + pb.gold),
+    critDmg: 2 + 0.1*S.relics.critdmg + pb.critdmg + 0.6*(S.soulTree.crit || 0),
+    goldMult: (1 + 0.1*S.relics.gold) * (1 + pb.gold) * soulGold,
     skillMult, cdMult, setRank,
     tier: ti,
   };
@@ -861,7 +927,7 @@ function spawnMonster() {
 function ensureDaily() {
   const today = new Date().toDateString();
   if (S.daily.date !== today) {
-    S.daily = { date: today, counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0 }, claimed:{} };
+    S.daily = { date: today, counts:{ kills:0, pulls:0, ups:0, boss:0, dungeon:0, diadungeon:0, tower:0, exped:0 }, claimed:{} };
   }
 }
 function track(id, n) {
@@ -898,7 +964,128 @@ function hasClaimables() {
   ensureDaily();
   for (const q of QUESTS) if (!S.daily.claimed[q.id] && S.daily.counts[q.id] >= q.target) return true;
   for (const a of ACHS) if (achClaimable(a)) return true;
+  if (guildReady()) return true;
   return false;
+}
+
+/* ---------- 길드 원정 ---------- */
+function fmtDur(sec){
+  sec = Math.max(0, Math.ceil(sec));
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+  if (h > 0) return h + '시간 ' + m + '분';
+  if (m > 0) return m + '분 ' + s + '초';
+  return s + '초';
+}
+function nowMs(){ return Date.now(); }
+function expedDef(type){ return EXPEDITIONS.find(e => e.id === type); }
+function slotDone(s){ return s && nowMs() >= s.endAt; }
+function guildReady(){ return S.guild.slots.some(slotDone); }
+function expedUnlocked(e){ return S.guild.level >= e.minLv; }
+function freeSlotIndex(){
+  const cnt = guildSlotCount(S.guild.level);
+  for (let i = 0; i < cnt; i++) if (!S.guild.slots[i]) return i;
+  return -1;
+}
+function dispatchExped(type){
+  const e = expedDef(type);
+  if (!e || !expedUnlocked(e)) return;
+  const i = freeSlotIndex();
+  if (i < 0) { toast('빈 원정 슬롯이 없습니다!'); return; }
+  S.guild.slots[i] = { type, endAt: nowMs() + e.dur * 1000 };
+  track('exped');
+  sfx('dia');
+  toast(e.emoji + ' ' + e.name + ' 파견!');
+  renderPanel();
+  saveGame();
+}
+function addGuildExp(n){
+  if (S.guild.level >= GUILD_MAX_LV) return;
+  S.guild.exp += n;
+  while (S.guild.level < GUILD_MAX_LV && S.guild.exp >= guildExpNeed(S.guild.level)) {
+    S.guild.exp -= guildExpNeed(S.guild.level);
+    S.guild.level++;
+    toast('🏰 길드 레벨업! Lv.' + S.guild.level);
+    sfx('epic');
+  }
+  if (S.guild.level >= GUILD_MAX_LV) S.guild.exp = 0;
+}
+function collectExped(i){
+  const s = S.guild.slots[i];
+  if (!slotDone(s)) return;
+  const e = expedDef(s.type);
+  const r = expedReward(e);
+  S.gold += r.gold; S.dia += r.dia;
+  S.guild.slots[i] = null;
+  addGuildExp(r.exp);
+  sfx('win');
+  toast(e.emoji + ' 원정 완료! ' + (r.gold ? '💰' + fmt(r.gold) + ' ' : '') + (r.dia ? '💎' + r.dia + ' ' : '') + '🏰' + r.exp + 'exp');
+  renderPanel();
+  saveGame();
+}
+// 즉시완료 비용: 남은 1분당 💎1 (최소 1)
+function instantCost(s){ return Math.max(1, Math.ceil((s.endAt - nowMs()) / 60000)); }
+function instantExped(i){
+  const s = S.guild.slots[i];
+  if (!s || slotDone(s)) return;
+  const cost = instantCost(s);
+  if (S.dia < cost) { toast('💎 다이아가 부족합니다 (' + cost + ' 필요)'); return; }
+  S.dia -= cost;
+  s.endAt = nowMs();
+  sfx('dia');
+  collectExped(i);
+}
+function guildSectionHtml(){
+  const g = S.guild;
+  const cnt = guildSlotCount(g.level);
+  const active = g.slots.slice(0, cnt).filter(Boolean).length;
+  const maxed = g.level >= GUILD_MAX_LV;
+  const need = guildExpNeed(g.level);
+  const pct = maxed ? 100 : Math.min(100, Math.floor(g.exp / need * 100));
+  let html = '<div class="sectionTitle">🏰 길드 원정 <span style="font-size:10px; color:#c9a25e;">Lv.' + g.level +
+    ' · 슬롯 ' + active + '/' + cnt + ' · 보상 ×' + guildMult().toFixed(2) + '</span></div>';
+  html += '<div class="guildExp"><div class="guildExpFill" style="width:' + pct + '%"></div>' +
+    '<span class="guildExpTxt">' + (maxed ? 'MAX' : 'EXP ' + g.exp + '/' + need) + '</span></div>';
+  html += '<div style="font-size:10px; color:#a09078; font-weight:700; margin:2px 0 4px;">전투와 별개로 실시간 진행(오프라인 포함) · 파견 무료</div>';
+
+  // 슬롯 현황 (활성 슬롯만)
+  for (let i = 0; i < cnt; i++) {
+    const s = g.slots[i];
+    if (!s) {
+      html += '<div class="questRow"><div class="questInfo"><div class="questName" style="color:#b0a088;">슬롯 ' + (i+1) + ' · 비어있음</div>' +
+        '<div class="questProg">아래에서 원정을 파견하세요</div></div></div>';
+      continue;
+    }
+    const e = expedDef(s.type);
+    const r = expedReward(e);
+    const reward = (r.gold ? '💰' + fmt(r.gold) + ' ' : '') + (r.dia ? '💎' + r.dia + ' ' : '') + '🏰' + r.exp;
+    if (slotDone(s)) {
+      html += '<div class="questRow guildReady"><div class="questInfo"><div class="questName">' + e.emoji + ' ' + e.name + ' · 완료!</div>' +
+        '<div class="questProg">' + reward + '</div></div>' +
+        '<button class="claimBtn" data-collect="' + i + '">받기!</button></div>';
+    } else {
+      const left = (s.endAt - nowMs()) / 1000;
+      html += '<div class="questRow"><div class="questInfo"><div class="questName">' + e.emoji + ' ' + e.name + '</div>' +
+        '<div class="questProg">남은 시간 ' + fmtDur(left) + ' · ' + reward + '</div></div>' +
+        '<button class="claimBtn gray" data-instant="' + i + '">⏩ 💎' + instantCost(s) + '</button></div>';
+    }
+  }
+
+  // 원정 메뉴
+  const full = freeSlotIndex() < 0;
+  html += '<div style="font-size:10px; color:#a09078; font-weight:700; margin:6px 0 2px;">원정 파견 (최고 스테이지 ' + S.maxStage + ' 기준 보상)</div>';
+  for (const e of EXPEDITIONS) {
+    const r = expedReward(e);
+    const unlocked = expedUnlocked(e);
+    const reward = (r.gold ? '💰' + fmt(r.gold) + ' ' : '') + (r.dia ? '💎' + r.dia + ' ' : '') + '🏰' + e.exp;
+    let btn;
+    if (!unlocked) btn = '<button class="claimBtn" disabled>🔒 Lv.' + e.minLv + '</button>';
+    else if (full) btn = '<button class="claimBtn" disabled>슬롯 가득</button>';
+    else btn = '<button class="claimBtn" data-disp="' + e.id + '">파견!</button>';
+    html += '<div class="questRow"><div class="questInfo"><div class="questName">' + e.emoji + ' ' + e.name +
+      ' <span style="color:#8a7a68; font-size:10px;">' + fmtDur(e.dur) + '</span></div>' +
+      '<div class="questProg">' + reward + '</div></div>' + btn + '</div>';
+  }
+  return html;
 }
 
 /* ---------- 전투 ---------- */
@@ -1539,26 +1726,46 @@ function buyRelic(id) {
 }
 
 /* ---------- 환생 ---------- */
+// 역대 최고치(bestStage) 기준 누적 포자 총량. soulTotalFor와 동일 철학:
+// "이만큼 깊이 갔으면 도합 이만큼"의 단조 증가 텔레스코핑. 가드가 없으면 stage140
+// 재환생→리셋→재등반→재환생 하강 나선이 매번 풀밸류를 받는 트레드밀 농사가 가능했다.
+// 캘리브레이션: 트레드밀 가드(역대최고 게이팅)는 유지하되, 가드가 제거한 '같은 깊이 반복 보상'을
+// '깊이당 1회 더 큰 보상'으로 보상하여 정직한 active 천장(역대최고 bestStage)을 ~416→~492로 회복.
+// 앵커 상향: bestStage 290 → ≈5400(배율 ×109), 450 → ≈36000(배율 ×721). (이전 600/4000 대비 ×9)
+// 곡선 = 0.5*(b-30)[조기 소량 보상] + k*(b-30)^p[후반 본체]. p,k는 위 두 앵커를 정확히 통과하도록 산출.
+const SPORE_LIN = 0.5, SPORE_P = 3.9944655800500057, SPORE_K = 1.1892761239013533e-6;
+function sporeTotalFor(bestStage) {
+  if (bestStage < 40) return 0;
+  return Math.max(0, Math.floor(SPORE_LIN * (bestStage - 30) + SPORE_K * Math.pow(bestStage - 30, SPORE_P)));
+}
 function sporeGain() {
-  if (S.maxStage < 40) return 0;
-  return Math.floor((S.maxStage - 30) * 1.2);
+  // 역대 최고치 가드: 현재 run의 maxStage가 아니라 S.life.bestStage(역대 최고) 기준.
+  // 기준선은 sporeFloor(획득 전용). sporesEarned(영구보너스 크기)와 역할 분리 → 부풀려진 베테랑 세이브의
+  // 데드존(신규 0) 없이도 더 깊이 가야만 신규 지급. 신규 플레이어는 sporeFloor==sporesEarned로 거동 불변.
+  return Math.max(0, sporeTotalFor(S.life.bestStage) - S.life.sporeFloor);
 }
 function doPrestige() {
   const gain = sporeGain();
   if (gain <= 0) return;
-  showModal('🌀', '환생하시겠습니까?', '용비늘 +' + gain + '개를 얻고 처음부터 다시 시작합니다.\n(스테이지·골드·레벨·장비·강화·스킬 초기화)\n\n✅ 유지: 펫·성급, 전직, 탑 기록, 스킬 각성, 다이아, 유물, 업적, 도감, 영구 보너스\n환생 후 영구 보너스: +' + ((S.life.sporesEarned+gain)*2) + '%\n🎁 시작 골드 +' + fmt((S.life.sporesEarned+gain)*100), [
+  const sg = soulGain();
+  showModal('🌀', '환생하시겠습니까?', '용비늘 +' + gain + '개를 얻고 처음부터 다시 시작합니다.\n(스테이지·골드·레벨·장비·강화·스킬 초기화)\n\n✅ 유지: 펫·성급, 전직, 탑 기록, 스킬 각성, 다이아, 유물, 용혼, 업적, 도감, 영구 보너스\n환생 후 영구 보너스: +' + ((S.life.sporesEarned+gain)*2) + '%\n🎁 시작 골드 +' + fmt((S.life.sporesEarned+gain)*100) + (sg > 0 ? '\n🐉 새 깊이 도달! 용혼 +' + sg : ''), [
     { label:'환생!', cb: ()=>{
         const keep = {
           dia:S.dia, pets:S.pets, petStars:S.petStars, codex:S.codex, relics:S.relics,
-          job:S.job, jobTier:S.jobTier, tower:S.tower, skillAwk:S.skillAwk,
-          spores:S.spores + gain,
+          job:S.job, jobTier:S.jobTier, tower:S.tower, skillAwk:S.skillAwk, guild:S.guild,
+          spores:S.spores + gain, souls:S.souls + sg, soulTree:S.soulTree,
           life:S.life, daily:S.daily, achLv:S.achLv, settings:S.settings,
         };
         keep.life.sporesEarned += gain;
+        keep.life.sporeFloor += gain;   // 획득 기준선도 동기 상승 (gain=total-floor ⟹ floor=total). 신규 플레이어는 둘이 동일 증가.
+        keep.life.soulsEarned += sg;
         keep.life.rebirths++;
         S = Object.assign(defaultState(), keep);
         S.dia = keep.dia; // defaultState의 100과 충돌 방지
-        S.gold += S.life.sporesEarned * 100; // 환생 보너스: 시작 골드
+        // 환생 보너스: 시작 골드 (+ 용혼 '인도' 노드는 진행도 연동 catch-up으로 복귀 가속)
+        S.gold += S.life.sporesEarned * 100;
+        if (S.soulTree.start > 0)
+          S.gold += Math.floor(mobGold(Math.max(1, Math.floor(S.life.bestStage * 0.5))) * S.soulTree.start * 8);
         player = { hp:1, maxHp:1, atkTimer:0 };
         skillCd = {};
         dungeonLeft = 0; dungeonGold = 0; dungeonDia = 0; trialLeft = 0; towerLeft = 0;
@@ -1575,7 +1782,7 @@ function doPrestige() {
         closeModal();
         sfx('level');
         flashFx();
-        toast('🌀 환생 완료! 영구 보너스 +' + (S.life.sporesEarned*2) + '%');
+        toast('🌀 환생 완료! 영구 보너스 +' + fmt(S.life.sporesEarned*2) + '%');
       } },
     { label:'취소', gray:true, cb: closeModal },
   ]);
@@ -1762,10 +1969,13 @@ function renderPanel() {
   } else if (activeTab === 'prestige') {
     const gain = sporeGain();
     const can = gain > 0;
-    let html = '<div class="prestigeHead"><h3>🌀 환생 &nbsp;<span style="font-size:11px; color:#8a7a68;">보유 용비늘 ' + fmt(S.spores) + ' · 영구 보너스 +' + (S.life.sporesEarned*2) + '%</span></h3>' +
+    let html = '<div class="prestigeHead"><h3>🌀 환생 &nbsp;<span style="font-size:11px; color:#8a7a68;">보유 용비늘 ' + fmt(S.spores) + ' · 영구 보너스 +' + fmt(S.life.sporesEarned*2) + '%</span></h3>' +
       '<p>스테이지 40+ 도달 시 환생 가능 · 용비늘 1개당 영구 +2% (자동 적용) · 용비늘로 아래 유물도 구매!</p></div>' +
       '<button id="prestigeBtn" ' + (can?'':'disabled') + '>' +
-      (can ? '🌀 환생하기 (+' + gain + ' 용비늘)' : '🔒 스테이지 40 필요 (현재 최고 ' + S.maxStage + ')') + '</button>';
+      (can ? '🌀 환생하기 (+' + gain + ' 용비늘)'
+           : (S.life.bestStage < 40
+               ? '🔒 스테이지 40 필요 (현재 최고 ' + S.maxStage + ')'
+               : '🔒 역대 최고 ' + S.life.bestStage + '층 돌파 시 용비늘 획득')) + '</button>';
     html += '<div class="sectionTitle">🏺 유물 상점 (용비늘 사용)</div>';
     for (const r of RELICS) {
       html += '<div class="upRow">' +
@@ -1774,10 +1984,26 @@ function renderPanel() {
         '<div class="upDesc">' + r.desc + '</div></div>' +
         '<button class="upBtn purple" data-relic="' + r.id + '">🧿 ' + fmt(relicCost(r)) + '</button></div>';
     }
+    // 용혼 (2차 프레스티지)
+    const nextSoulAt = (soulTotalFor(S.life.bestStage) + 1) * SOUL_STEP + SOUL_START;
+    const totalSoulMult = soulMult('atk',0.2) * soulMult('hp',0.2) * soulMult('gold',0.25);
+    html += '<div class="sectionTitle">🐉 용혼 <span style="font-size:10px; color:#9c27b0;">보유 ' + S.souls + ' · 누적 ' + S.life.soulsEarned + ' · 총 강화 ×' + totalSoulMult.toFixed(2) + '</span></div>';
+    html += '<div style="font-size:10px; color:#a09078; font-weight:700;">역대 최고 스테이지 ' + S.life.bestStage + ' · 다음 용혼까지 ' + nextSoulAt + '층 (40층당 +1, 새 깊이에서만 획득)</div>';
+    for (const n of SOUL_NODES) {
+      const lvl = S.soulTree[n.id] || 0;
+      const cost = soulCost(n);
+      const afford = S.souls >= cost;
+      html += '<div class="upRow">' +
+        '<div class="upIcon">' + n.icon + '</div>' +
+        '<div class="upInfo"><div class="upName">' + n.name + ' <span style="color:#c9a25e">Lv.' + lvl + '</span></div>' +
+        '<div class="upDesc">' + n.desc + ' · 현재 ' + n.eff(lvl) + '</div></div>' +
+        '<button class="upBtn purple" data-soul="' + n.id + '" ' + (afford ? '' : 'disabled') + '>🐉 ' + cost + '</button></div>';
+    }
     p.innerHTML = html;
     const btn = $('prestigeBtn');
     if (btn && can) btn.addEventListener('click', doPrestige);
     p.querySelectorAll('[data-relic]').forEach(b => b.addEventListener('click', ()=>buyRelic(b.dataset.relic)));
+    p.querySelectorAll('[data-soul]').forEach(b => b.addEventListener('click', ()=>buySoulNode(b.dataset.soul)));
 
   } else { // more
     ensureDaily();
@@ -1785,7 +2011,8 @@ function renderPanel() {
     const dgCan = dgUsed < DUNGEON_DAILY;
     const ddUsed = S.daily.counts.diadungeon;
     const ddCan = ddUsed < DIA_DUNGEON_DAILY;
-    let html = '<div class="sectionTitle">⚔️ 던전</div>' +
+    let html = guildSectionHtml();
+    html += '<div class="sectionTitle">⚔️ 던전</div>' +
       '<div class="questRow"><div class="questInfo"><div class="questName">💰 골드 던전</div>' +
       '<div class="questProg">' + DUNGEON_TIME + '초 동안 골드 몬스터 사냥 · 오늘 ' + dgUsed + '/' + DUNGEON_DAILY + '회</div></div>' +
       '<button class="claimBtn" id="dungeonBtn" ' + (dgCan ? '' : 'disabled') + '>' + (dgCan ? '입장!' : '내일 다시') + '</button></div>' +
@@ -1838,6 +2065,9 @@ function renderPanel() {
       '<div style="font-size:10px; color:#b0a088; margin-top:6px;">누적 처치 ' + fmt(S.life.kills) + ' · 보스 ' + fmt(S.life.bossKills) + ' · 환생 ' + S.life.rebirths + '회' +
       '<br>📈 오프라인 효율 ' + Math.round(offlineEff()*100) + '%' + (offlineEff() >= 1 ? ' 💯' : '/100%') + ' · 보상 캡 ' + (offlineCapSec()/3600) + '시간</div>';
     p.innerHTML = html;
+    p.querySelectorAll('[data-disp]').forEach(b => b.addEventListener('click', ()=>dispatchExped(b.dataset.disp)));
+    p.querySelectorAll('[data-collect]').forEach(b => b.addEventListener('click', ()=>collectExped(+b.dataset.collect)));
+    p.querySelectorAll('[data-instant]').forEach(b => b.addEventListener('click', ()=>instantExped(+b.dataset.instant)));
     $('dungeonBtn').addEventListener('click', ()=>enterDungeon('gold'));
     $('diaDungeonBtn').addEventListener('click', ()=>enterDungeon('dia'));
     $('towerBtn').addEventListener('click', startTower);
@@ -1893,9 +2123,25 @@ function mergeState(data) {
   if (S.codex.mobs['🐲']) { delete S.codex.mobs['🐲']; S.codex.mobs['🐊'] = 1; }
   if (S.codex.bosses['🐉']) { delete S.codex.bosses['🐉']; S.codex.bosses['👁️'] = 1; }
   S.relics = Object.assign({gold:0,atk:0,hp:0,time:0,critdmg:0}, data.relics);
-  S.life = Object.assign({kills:0,bossKills:0,pulls:0,sporesEarned:0,rebirths:0,bestStage:1}, data.life);
+  S.life = Object.assign({kills:0,bossKills:0,pulls:0,sporesEarned:0,sporeFloor:0,soulsEarned:0,rebirths:0,bestStage:1}, data.life);
+  // 베테랑 세이브 마이그레이션: 구버전엔 sporeFloor 없음. 기준선을 현재 역대최고에 맞춰 백필 →
+  // 부풀려진 sporesEarned로 인한 데드존(신규 0)도, 곡선 풀밸류 재지급(과지급)도 방지. sporesEarned는 불변(파워 보존).
+  if (typeof (data.life && data.life.sporeFloor) !== 'number') S.life.sporeFloor = sporeTotalFor(S.life.bestStage);
+  S.life.sporeFloor = Math.max(0, Math.floor(S.life.sporeFloor) || 0);
+  S.souls = Math.max(0, Math.floor(data.souls) || 0);
+  S.soulTree = Object.assign({atk:0,hp:0,gold:0,crit:0,start:0}, data.soulTree);
+  for (const k in S.soulTree) S.soulTree[k] = Math.max(0, Math.floor(S.soulTree[k]) || 0);
   S.daily = Object.assign({date:'',counts:{kills:0,pulls:0,ups:0,boss:0},claimed:{}}, data.daily);
-  S.daily.counts = Object.assign({kills:0,pulls:0,ups:0,boss:0,dungeon:0,diadungeon:0,tower:0}, S.daily.counts);
+  S.daily.counts = Object.assign({kills:0,pulls:0,ups:0,boss:0,dungeon:0,diadungeon:0,tower:0,exped:0}, S.daily.counts);
+  S.guild = Object.assign({level:1, exp:0, slots:[null,null,null,null]}, data.guild);
+  if (!Array.isArray(S.guild.slots)) S.guild.slots = [null,null,null,null];
+  S.guild.slots = S.guild.slots.slice(0, GUILD_SLOT_MAX);
+  while (S.guild.slots.length < GUILD_SLOT_MAX) S.guild.slots.push(null);
+  // 손상 슬롯 방어: 유효한 원정 타입 + 숫자 endAt 아니면 비움
+  S.guild.slots = S.guild.slots.map(s =>
+    (s && EXPEDITIONS.some(e => e.id === s.type) && typeof s.endAt === 'number') ? { type:s.type, endAt:s.endAt } : null);
+  S.guild.level = Math.max(1, Math.min(GUILD_MAX_LV, Math.floor(S.guild.level) || 1));
+  S.guild.exp = Math.max(0, Math.floor(S.guild.exp) || 0);
   S.achLv = data.achLv || {};
   S.settings = Object.assign({sound:true,autoPull:false,autoEnh:false}, data.settings);
   S.job = data.job || null;
@@ -1916,6 +2162,7 @@ function loadGame() {
       S.spores = old.spores || 0;              // + 유물 구매 화폐로도 지급
       S.life.rebirths = old.rebirths || 0;
       S.life.bestStage = old.maxStage || 1;
+      S.life.sporeFloor = sporeTotalFor(S.life.bestStage);   // v1 베테랑도 기준선을 best에 맞춤 (sporesEarned=old.spores는 보너스로 유지)
       saveGame();
       return true;
     }
@@ -2099,7 +2346,7 @@ function render() {
   const job = S.job ? JOBS.find(j => j.id === S.job) : null;
   $('charInfo').innerHTML = t.emoji + ' Lv.' + S.level + '<small>' + t.name +
     (job ? ' · ' + job.emoji + job.name + S.jobTier : '') +
-    (S.life.sporesEarned>0 ? ' · 🧿+' + (S.life.sporesEarned*2) + '%' : '') + '</small>';
+    (S.life.sporesEarned>0 ? ' · 🧿+' + fmt(S.life.sporesEarned*2) + '%' : '') + '</small>';
 
   if (towerLeft > 0) {
     $('stageLabel').textContent = '🗼 무한의 탑 ' + (S.tower+1) + '층';

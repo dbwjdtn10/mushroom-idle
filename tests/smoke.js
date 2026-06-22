@@ -121,8 +121,11 @@ check('마이그레이션: score 재계산', S.equip.weapon.score === 10*5 + 5, 
 check('마이그레이션: enhance 보존', S.enhance[slotKey] === before + 3);
 
 // 7) 환생 — 모달 버튼 클릭 시뮬레이션
-S.maxStage = 45;
-const expectedSpores = Math.floor((45 - 30) * 1.2);
+// 포자 경제는 이제 역대 최고치(S.life.bestStage) 가드 기반 텔레스코핑(soulGain과 동일 철학):
+// gain = max(0, sporeTotalFor(bestStage) - 이미받은누적). 따라서 maxStage가 아니라 bestStage로 게이팅.
+S.maxStage = 45; S.life.bestStage = 45; S.life.sporesEarned = 0;
+const expectedSpores = sporeGain();   // 공식 변경에 견고하도록 직접 호출
+check('환생: 용비늘 획득량 공식(역대최고 가드)', expectedSpores === sporeTotalFor(S.life.bestStage) - S.life.sporesEarned && expectedSpores > 0, 'gain=' + expectedSpores);
 doPrestige();
 const modalBtns = els['modalBtns'].children;
 const sporesEarnedBefore = S.life.sporesEarned;
@@ -386,6 +389,213 @@ els['modalBtns'].children[0].click();
 els['modalBtns'].children[0].click();
 check('오프라인: 보상 1회 지급 + 수치 일치', Math.abs((S.gold - goldOffB2) - expOff2) <= expOff2 * 0.01 + 2, '+' + fmt(S.gold - goldOffB2));
 S.relics.time = tB2; S.life.rebirths = rB2; S.tower = twB2;
+
+// ===== 길드 원정 =====
+
+// 38) 기본 상태 + 슬롯 수 곡선
+check('길드: 초기 Lv.1 슬롯 1개', S.guild.level === 1 && guildSlotCount(1) === 1);
+check('길드: 슬롯 곡선 (4레벨당 +1, 최대 4)', guildSlotCount(5) === 2 && guildSlotCount(13) === 4 && guildSlotCount(99) === 4);
+
+// 39) 파견 — 빈 슬롯에 들어가고 일일 카운트 + endAt 미래
+S.daily.counts.exped = 0;
+S.guild.slots = [null,null,null,null];
+dispatchExped('patrol');
+check('길드: 파견 시 슬롯 점유', S.guild.slots[0] && S.guild.slots[0].type === 'patrol', 'slot0=' + (S.guild.slots[0]&&S.guild.slots[0].type));
+check('길드: 파견 일일 퀘스트 트래킹', S.daily.counts.exped === 1);
+check('길드: endAt 미래값', S.guild.slots[0].endAt > Date.now());
+
+// 40) 슬롯 가득 시 추가 파견 거부 (Lv.1은 슬롯 1개)
+dispatchExped('hunt');
+check('길드: 슬롯 1개 초과 파견 거부', S.guild.slots[1] === null);
+
+// 41) 잠긴 원정(relic minLv4) 파견 거부
+S.guild.slots = [null,null,null,null]; S.guild.level = 1;
+dispatchExped('relic');
+check('길드: 미해금 원정 거부', S.guild.slots.every(s => s === null));
+
+// 42) 완료 + 수령 — 보상 지급 + exp 적립, slotDone 판정
+S.guild.level = 5; // 슬롯 2개
+S.guild.slots = [null,null,null,null];
+S.maxStage = 100;
+dispatchExped('patrol');
+S.guild.slots[0].endAt = Date.now() - 1000; // 강제 완료
+check('길드: 완료 판정', guildReady() === true);
+const eP = EXPEDITIONS.find(e=>e.id==='patrol');
+const rP = expedReward(eP);
+const goldGB = S.gold, expGB = S.guild.exp;
+collectExped(0);
+check('길드: 수령 시 골드 지급', S.gold === goldGB + rP.gold && rP.gold > 0, '+' + fmt(rP.gold));
+check('길드: 수령 시 슬롯 비움', S.guild.slots[0] === null);
+check('길드: 수령 시 exp 적립', S.guild.exp === expGB + rP.exp);
+
+// 43) 보상 진행도 연동 — maxStage 높을수록 골드 보상 증가
+S.maxStage = 50;  const r50 = expedReward(eP).gold;
+S.maxStage = 200; const r200 = expedReward(eP).gold;
+check('길드: 보상 진행도 연동', r200 > r50, fmt(r50) + ' → ' + fmt(r200));
+
+// 44) 즉시완료 — 다이아 차감 + 즉시 수령 (남은 1분당 💎1)
+S.guild.level = 5; S.guild.slots = [null,null,null,null]; S.maxStage = 100;
+dispatchExped('hunt');
+const sH = S.guild.slots[0];
+const cost = Math.max(1, Math.ceil((sH.endAt - Date.now())/60000));
+S.dia = cost + 50;
+const diaIB = S.dia, goldIB = S.gold;
+const rH = expedReward(EXPEDITIONS.find(e=>e.id==='hunt'));
+instantExped(0);
+check('길드: 즉시완료 다이아 차감', S.dia === diaIB - cost + rH.dia, 'cost=' + cost + ' 보상dia=' + rH.dia);
+check('길드: 즉시완료 후 수령됨', S.guild.slots[0] === null && S.gold === goldIB + rH.gold);
+
+// 45) 즉시완료 다이아 부족 시 거부
+S.guild.slots = [null,null,null,null];
+dispatchExped('hunt');
+S.dia = 0;
+instantExped(0);
+check('길드: 다이아 부족 시 즉시완료 거부', S.guild.slots[0] && !slotDone(S.guild.slots[0]));
+
+// 46) 레벨업 — 임계치 도달 시 레벨 상승 + 잔여 exp 이월
+S.guild.level = 1; S.guild.exp = 0;
+addGuildExp(guildExpNeed(1) + 5);
+check('길드: 레벨업 + exp 이월', S.guild.level === 2 && S.guild.exp === 5, 'lv=' + S.guild.level + ' exp=' + S.guild.exp);
+S.guild.level = GUILD_MAX_LV; S.guild.exp = 0;
+addGuildExp(99999);
+check('길드: 최대 레벨 상한', S.guild.level === GUILD_MAX_LV && S.guild.exp === 0);
+
+// 47) 환생 유지 — guild가 keep 목록에 포함
+S.guild.level = 7; S.guild.exp = 33;
+S.guild.slots = [null,null,null,null];
+dispatchExped('patrol');
+S.maxStage = 45;
+doPrestige();
+els['modalBtns'].children[0].click();
+check('길드: 환생 후 레벨/슬롯 유지', S.guild.level === 7 && S.guild.exp === 33 && S.guild.slots[0] && S.guild.slots[0].type === 'patrol');
+
+// 48) 저장/로드 왕복 + 손상 슬롯 방어
+saveGame();
+const savedG = JSON.parse(localStorage.getItem('mushroomIdleSave_v2'));
+check('길드: 저장 직렬화', savedG.guild && savedG.guild.level === 7 && Array.isArray(savedG.guild.slots));
+const corrupt = JSON.parse(JSON.stringify(S));
+corrupt.guild.slots = [{type:'nonexistent', endAt:123}, {type:'patrol'}, null, null];
+corrupt.guild.level = 999;
+mergeState(corrupt);
+check('길드: 손상 슬롯 정화', S.guild.slots[0] === null && S.guild.slots[1] === null, JSON.stringify(S.guild.slots.map(s=>s&&s.type)));
+check('길드: 레벨 상한 클램프', S.guild.level === GUILD_MAX_LV);
+
+// ===== 용혼 (2차 프레스티지) =====
+
+// 49) 임계값 공식 — 시작 미만 0, 이후 STEP당 +1
+check('용혼: 임계값 미만 0', soulTotalFor(SOUL_START - 1) === 0);
+check('용혼: STEP당 +1', soulTotalFor(SOUL_START + SOUL_STEP*3 + 5) === 3, 'total=' + soulTotalFor(SOUL_START + SOUL_STEP*3 + 5));
+
+// 50) 환생 시 새 깊이만큼 용혼 지급
+S.souls = 0; S.life.soulsEarned = 0; S.soulTree = {atk:0,hp:0,gold:0};
+S.life.bestStage = SOUL_START + SOUL_STEP*5;   // 5 용혼치 깊이
+S.maxStage = 45;   // 환생 가능
+const sgExp = soulGain();
+check('용혼: soulGain = 미수령 깊이분', sgExp === 5, 'gain=' + sgExp);
+doPrestige();
+els['modalBtns'].children[0].click();
+check('용혼: 환생 시 지급', S.souls === 5 && S.life.soulsEarned === 5, 'souls=' + S.souls);
+
+// 51) exploit-proof — 같은 벽에서 재환생 시 추가 용혼 0
+S.life.bestStage = SOUL_START + SOUL_STEP*5;  // 깊이 그대로
+S.maxStage = 45;
+check('용혼: 같은 깊이 재환생 → 0 (treadmill 차단)', soulGain() === 0);
+doPrestige(); els['modalBtns'].children[0].click();
+check('용혼: 같은 벽 farming 불가', S.souls === 5 && S.life.soulsEarned === 5);
+
+// 52) 더 깊이 가면 차액만 지급
+S.life.bestStage = SOUL_START + SOUL_STEP*8;  // +3 깊이
+S.maxStage = 45;
+check('용혼: 새 깊이 차액', soulGain() === 3);
+doPrestige(); els['modalBtns'].children[0].click();
+check('용혼: 누적 8', S.souls === 8 && S.life.soulsEarned === 8);
+
+// 53) 곱연산 강화 구매 — 비용 차감 + atk 곱연산 반영
+recalcStats(); const atkPreSoul = stats.atk;
+const costAtk = soulCost(SOUL_NODES.find(n=>n.id==='atk'));
+buySoulNode('atk');
+check('용혼: 노드 구매 비용 차감', S.souls === 8 - costAtk && S.soulTree.atk === 1, 'souls=' + S.souls);
+check('용혼: 공격 ×1.2 반영', Math.abs(stats.atk / atkPreSoul - 1.2) < 1e-6, 'ratio=' + (stats.atk/atkPreSoul).toFixed(3));
+
+// 54) 골드 노드 → goldMult 반영
+const goldPreSoul = stats.goldMult;
+buySoulNode('gold');
+check('용혼: 골드 ×1.25 반영', Math.abs(stats.goldMult / goldPreSoul - 1.25) < 1e-6, 'ratio=' + (stats.goldMult/goldPreSoul).toFixed(3));
+
+// 54b) 격노 노드 → 치명타 피해 +0.6 반영
+S.souls = 5;
+const critPreSoul = stats.critDmg;
+buySoulNode('crit');
+check('용혼: 치명타 피해 +0.6 반영', Math.abs(stats.critDmg - critPreSoul - 0.6) < 1e-6, 'critDmg=' + stats.critDmg.toFixed(2));
+
+// 54c) 인도 노드 → 환생 시작 골드 catch-up (노드 보유 시 시작 골드 증가)
+// 포자 가드(역대최고치) 도입 후 같은 bestStage로 연속 환생하면 두번째는 gain=0이라 doPrestige가
+// 조기 반환된다. 이 테스트는 '시작 골드' 비교가 목적이므로 매 환생 전 획득 기준선(sporeFloor)을
+// 초기화해 두 환생이 모두 실행되도록 한다(가드 자체는 chaos/analyze-rebirth가 검증).
+S.souls = 5; S.soulTree.start = 0; S.life.bestStage = 400; S.life.sporesEarned = 0; S.life.sporeFloor = 0;
+S.maxStage = 45; S.stage = 1;
+doPrestige(); els['modalBtns'].children[0].click();
+const startGoldNoNode = S.gold;   // 인도 0Lv 기준 시작 골드
+S.souls = 5; S.life.bestStage = 400; S.maxStage = 45; S.life.sporesEarned = 0; S.life.sporeFloor = 0;
+buySoulNode('start');   // 인도 1Lv
+doPrestige(); els['modalBtns'].children[0].click();
+check('용혼: 인도 노드 시작 골드 가속', S.gold > startGoldNoNode && S.soulTree.start === 1, 'node='+S.gold.toFixed(0)+' vs none='+startGoldNoNode.toFixed(0));
+
+// 55) 용혼 부족 시 구매 거부
+S.souls = 0;
+const treeBefore = S.soulTree.hp;
+buySoulNode('hp');
+check('용혼: 부족 시 구매 거부', S.soulTree.hp === treeBefore && S.souls === 0);
+
+// 56) 환생 유지 — 용혼/트리 보존
+S.souls = 7; S.soulTree = {atk:3,hp:1,gold:2};
+S.maxStage = 45; S.life.bestStage = SOUL_START + SOUL_STEP*8;  // 추가 깊이 없음
+doPrestige(); els['modalBtns'].children[0].click();
+check('용혼: 환생 후 트리 유지', S.soulTree.atk === 3 && S.soulTree.hp === 1 && S.soulTree.gold === 2 && S.souls === 7);
+
+// 57) 저장/로드 왕복 + 정규화
+saveGame();
+const savedS = JSON.parse(localStorage.getItem('mushroomIdleSave_v2'));
+check('용혼: 저장 직렬화', savedS.souls === 7 && savedS.soulTree.atk === 3 && typeof savedS.life.soulsEarned === 'number');
+const corruptS = JSON.parse(JSON.stringify(S));
+corruptS.souls = -5; corruptS.soulTree = { atk: 2.7, hp: 'x', gold: 1 };
+mergeState(corruptS);
+check('용혼: 손상값 정규화', S.souls === 0 && S.soulTree.atk === 2 && S.soulTree.hp === 0 && S.soulTree.gold === 1, JSON.stringify(S.soulTree)+' souls='+S.souls);
+
+// 58) 베테랑 세이브 데드존 해소 — sporeFloor 신설로 획득 기준선과 영구보너스(sporesEarned) 역할 분리
+// 구버전 베테랑: 풀밸류+무한농사로 sporesEarned가 부풀려졌고 sporeFloor 필드 없음.
+// 마이그레이션은 기준선을 현재 역대최고에 맞춰 백필 → 데드존(신규 0)/과지급 둘 다 방지, 파워(보너스)는 보존.
+const veteran = { life: { sporesEarned: 999999, bestStage: 200 } };   // sporeFloor 없음 = 구버전
+mergeState(veteran);
+check('데드존ⓐ: sporeFloor 백필 = sporeTotalFor(best)', S.life.sporeFloor === sporeTotalFor(200), 'floor='+S.life.sporeFloor+' total='+sporeTotalFor(200));
+check('데드존ⓑ: 현재 best에선 과지급 없음', sporeGain() === 0, 'gain='+sporeGain());
+S.life.bestStage = 250;
+check('데드존ⓒ: 더 깊이 가면 즉시 차액 신규 획득', sporeGain() === sporeTotalFor(250) - sporeTotalFor(200) && sporeGain() > 0, 'gain='+sporeGain());
+check('데드존ⓓ: 영구보너스(sporesEarned) 불변 — 파워 보존', S.life.sporesEarned === 999999, 'earned='+S.life.sporesEarned);
+
+// 59) 신규 플레이어 거동 불변 — fresh defaultState에선 sporeFloor와 sporesEarned가 항상 동기
+S = defaultState();
+recalcStats();
+check('신규불변: 초기 sporeFloor==sporesEarned==0', S.life.sporeFloor === 0 && S.life.sporesEarned === 0);
+S.maxStage = 300; S.stage = 300; S.life.bestStage = 300;   // 정직하게 깊이 도달
+const freshGain = sporeGain();
+check('신규불변: 가드 기준선=floor, full payout', freshGain === sporeTotalFor(300) - S.life.sporeFloor && freshGain > 0, 'gain='+freshGain);
+doPrestige(); els['modalBtns'].children[0].click();
+check('신규불변: 환생 후 floor==earned (동기 유지)', S.life.sporeFloor === S.life.sporesEarned && S.life.sporeFloor === sporeTotalFor(300), 'floor='+S.life.sporeFloor+' earned='+S.life.sporesEarned);
+check('신규불변: 같은 깊이 재환생 gain=0 (트레드밀 차단 유지)', sporeGain() === 0, 'gain='+sporeGain());
+
+// 60) 공식 동등성 — 신규(fresh) 다중 환생 시퀀스에서 새 식(floor 기준)이 구 식(earned 기준)과 항상 일치
+// floor와 earned가 0에서 동일 증가하므로 sporeGain()이 RNG와 무관하게 구 거동과 비트 단위로 같음을 증명.
+S = defaultState();
+let formulaMatch = true;
+for (const depth of [120, 240, 333, 480]) {
+  S.maxStage = depth; S.stage = depth; S.life.bestStage = depth;
+  const newGain = sporeGain();
+  const oldGain = Math.max(0, sporeTotalFor(S.life.bestStage) - S.life.sporesEarned);  // 구 식
+  if (newGain !== oldGain) formulaMatch = false;
+  if (newGain > 0) { doPrestige(); els['modalBtns'].children[0].click(); }
+}
+check('신규불변: 신규 다중환생 내내 신/구 획득식 동일(RNG 무관)', formulaMatch && S.life.sporeFloor === S.life.sporesEarned, 'floor='+S.life.sporeFloor+' earned='+S.life.sporesEarned);
 `;
 
 (0, eval)(src + body);
