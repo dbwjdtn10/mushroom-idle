@@ -121,9 +121,11 @@ check('마이그레이션: score 재계산', S.equip.weapon.score === 10*5 + 5, 
 check('마이그레이션: enhance 보존', S.enhance[slotKey] === before + 3);
 
 // 7) 환생 — 모달 버튼 클릭 시뮬레이션
-S.maxStage = 45;
+// 포자 경제는 이제 역대 최고치(S.life.bestStage) 가드 기반 텔레스코핑(soulGain과 동일 철학):
+// gain = max(0, sporeTotalFor(bestStage) - 이미받은누적). 따라서 maxStage가 아니라 bestStage로 게이팅.
+S.maxStage = 45; S.life.bestStage = 45; S.life.sporesEarned = 0;
 const expectedSpores = sporeGain();   // 공식 변경에 견고하도록 직접 호출
-check('환생: 용비늘 획득량 공식(깊이 초선형)', expectedSpores === Math.floor(15 * 1.2 * (1 + 45/300)), 'gain=' + expectedSpores);
+check('환생: 용비늘 획득량 공식(역대최고 가드)', expectedSpores === sporeTotalFor(S.life.bestStage) - S.life.sporesEarned && expectedSpores > 0, 'gain=' + expectedSpores);
 doPrestige();
 const modalBtns = els['modalBtns'].children;
 const sporesEarnedBefore = S.life.sporesEarned;
@@ -527,11 +529,14 @@ buySoulNode('crit');
 check('용혼: 치명타 피해 +0.6 반영', Math.abs(stats.critDmg - critPreSoul - 0.6) < 1e-6, 'critDmg=' + stats.critDmg.toFixed(2));
 
 // 54c) 인도 노드 → 환생 시작 골드 catch-up (노드 보유 시 시작 골드 증가)
-S.souls = 5; S.soulTree.start = 0; S.life.bestStage = 400;
+// 포자 가드(역대최고치) 도입 후 같은 bestStage로 연속 환생하면 두번째는 gain=0이라 doPrestige가
+// 조기 반환된다. 이 테스트는 '시작 골드' 비교가 목적이므로 매 환생 전 sporesEarned를 초기화해
+// 두 환생이 모두 실행되도록 한다(가드 자체는 chaos/analyze-rebirth가 검증).
+S.souls = 5; S.soulTree.start = 0; S.life.bestStage = 400; S.life.sporesEarned = 0;
 S.maxStage = 45; S.stage = 1;
 doPrestige(); els['modalBtns'].children[0].click();
 const startGoldNoNode = S.gold;   // 인도 0Lv 기준 시작 골드
-S.souls = 5; S.life.bestStage = 400; S.maxStage = 45;
+S.souls = 5; S.life.bestStage = 400; S.maxStage = 45; S.life.sporesEarned = 0;
 buySoulNode('start');   // 인도 1Lv
 doPrestige(); els['modalBtns'].children[0].click();
 check('용혼: 인도 노드 시작 골드 가속', S.gold > startGoldNoNode && S.soulTree.start === 1, 'node='+S.gold.toFixed(0)+' vs none='+startGoldNoNode.toFixed(0));

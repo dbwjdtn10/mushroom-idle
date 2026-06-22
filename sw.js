@@ -1,5 +1,5 @@
 /* 용알 키우기 — 서비스워커 (오프라인 캐시) */
-const CACHE = 'mushroom-idle-v16';
+const CACHE = 'mushroom-idle-v18';
 const ASSETS = [
   './',
   './index.html',

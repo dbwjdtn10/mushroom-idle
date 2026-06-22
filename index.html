@@ -1726,11 +1726,22 @@ function buyRelic(id) {
 }
 
 /* ---------- 환생 ---------- */
+// 역대 최고치(bestStage) 기준 누적 포자 총량. soulTotalFor와 동일 철학:
+// "이만큼 깊이 갔으면 도합 이만큼"의 단조 증가 텔레스코핑. 가드가 없으면 stage140
+// 재환생→리셋→재등반→재환생 하강 나선이 매번 풀밸류를 받는 트레드밀 농사가 가능했다.
+// 캘리브레이션: 트레드밀 가드(역대최고 게이팅)는 유지하되, 가드가 제거한 '같은 깊이 반복 보상'을
+// '깊이당 1회 더 큰 보상'으로 보상하여 정직한 active 천장(역대최고 bestStage)을 ~416→~492로 회복.
+// 앵커 상향: bestStage 290 → ≈5400(배율 ×109), 450 → ≈36000(배율 ×721). (이전 600/4000 대비 ×9)
+// 곡선 = 0.5*(b-30)[조기 소량 보상] + k*(b-30)^p[후반 본체]. p,k는 위 두 앵커를 정확히 통과하도록 산출.
+const SPORE_LIN = 0.5, SPORE_P = 3.9944655800500057, SPORE_K = 1.1892761239013533e-6;
+function sporeTotalFor(bestStage) {
+  if (bestStage < 40) return 0;
+  return Math.max(0, Math.floor(SPORE_LIN * (bestStage - 30) + SPORE_K * Math.pow(bestStage - 30, SPORE_P)));
+}
 function sporeGain() {
-  if (S.maxStage < 40) return 0;
-  // 깊이 초선형 보정(×(1+maxStage/300)): 선형 영구보너스 vs 지수 난이도의 한계가치 둔화를 상쇄해
-  // 환생당 진행이 음수로 꺾이지 않게 한다. 지수 난이도가 폭주를 막는 거버너.
-  return Math.floor((S.maxStage - 30) * 1.2 * (1 + S.maxStage / 300));
+  // 역대 최고치 가드: 현재 run의 maxStage가 아니라 S.life.bestStage(역대 최고) 기준.
+  // 이미 받은 누적분(sporesEarned)을 빼므로 더 깊이 가야만 신규 지급 → 후퇴 환생 농사 차단.
+  return Math.max(0, sporeTotalFor(S.life.bestStage) - S.life.sporesEarned);
 }
 function doPrestige() {
   const gain = sporeGain();
@@ -1769,7 +1780,7 @@ function doPrestige() {
         closeModal();
         sfx('level');
         flashFx();
-        toast('🌀 환생 완료! 영구 보너스 +' + (S.life.sporesEarned*2) + '%');
+        toast('🌀 환생 완료! 영구 보너스 +' + fmt(S.life.sporesEarned*2) + '%');
       } },
     { label:'취소', gray:true, cb: closeModal },
   ]);
@@ -1956,10 +1967,13 @@ function renderPanel() {
   } else if (activeTab === 'prestige') {
     const gain = sporeGain();
     const can = gain > 0;
-    let html = '<div class="prestigeHead"><h3>🌀 환생 &nbsp;<span style="font-size:11px; color:#8a7a68;">보유 용비늘 ' + fmt(S.spores) + ' · 영구 보너스 +' + (S.life.sporesEarned*2) + '%</span></h3>' +
+    let html = '<div class="prestigeHead"><h3>🌀 환생 &nbsp;<span style="font-size:11px; color:#8a7a68;">보유 용비늘 ' + fmt(S.spores) + ' · 영구 보너스 +' + fmt(S.life.sporesEarned*2) + '%</span></h3>' +
       '<p>스테이지 40+ 도달 시 환생 가능 · 용비늘 1개당 영구 +2% (자동 적용) · 용비늘로 아래 유물도 구매!</p></div>' +
       '<button id="prestigeBtn" ' + (can?'':'disabled') + '>' +
-      (can ? '🌀 환생하기 (+' + gain + ' 용비늘)' : '🔒 스테이지 40 필요 (현재 최고 ' + S.maxStage + ')') + '</button>';
+      (can ? '🌀 환생하기 (+' + gain + ' 용비늘)'
+           : (S.life.bestStage < 40
+               ? '🔒 스테이지 40 필요 (현재 최고 ' + S.maxStage + ')'
+               : '🔒 역대 최고 ' + S.life.bestStage + '층 돌파 시 용비늘 획득')) + '</button>';
     html += '<div class="sectionTitle">🏺 유물 상점 (용비늘 사용)</div>';
     for (const r of RELICS) {
       html += '<div class="upRow">' +
@@ -2325,7 +2339,7 @@ function render() {
   const job = S.job ? JOBS.find(j => j.id === S.job) : null;
   $('charInfo').innerHTML = t.emoji + ' Lv.' + S.level + '<small>' + t.name +
     (job ? ' · ' + job.emoji + job.name + S.jobTier : '') +
-    (S.life.sporesEarned>0 ? ' · 🧿+' + (S.life.sporesEarned*2) + '%' : '') + '</small>';
+    (S.life.sporesEarned>0 ? ' · 🧿+' + fmt(S.life.sporesEarned*2) + '%' : '') + '</small>';
 
   if (towerLeft > 0) {
     $('stageLabel').textContent = '🗼 무한의 탑 ' + (S.tower+1) + '층';

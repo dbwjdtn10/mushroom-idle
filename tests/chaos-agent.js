@@ -186,6 +186,16 @@ S.maxStage = 45;  // 같은 깊이로 재환생 N회
 for (let k = 0; k < 5; k++) { doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click(); S.maxStage = 45; }
 expectT('용혼 같은 벽 5회 재환생 → farming 불가', S.souls === soulsAfter1 && S.life.soulsEarned === 4, 'souls=' + S.souls + ' earned=' + S.life.soulsEarned);
 
+// [E12b] 포자 하강 나선 farming → 추가 지급 0 (역대최고치 가드)
+// 버그 재현: stage140으로 재환생→리셋→재등반→또 환생을 반복해도 매번 풀밸류를 받던 트레드밀.
+// 가드 후엔 역대 최고치를 더 갱신해야만 신규 포자가 나온다.
+S.life.sporesEarned = 0; S.spores = 0; S.life.bestStage = 300; S.maxStage = 300;
+doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click();
+const sporesAfterDeep = S.life.sporesEarned;     // sporeTotalFor(300)을 1회 지급
+S.maxStage = 140;  // 후퇴 환생 N회 (역대 최고치 300은 유지)
+for (let k = 0; k < 5; k++) { doPrestige(); if ($('modalBtns').children[0]) $('modalBtns').children[0].click(); S.maxStage = 140; }
+expectT('포자 후퇴 환생 5회 → farming 불가', S.life.sporesEarned === sporesAfterDeep && sporesAfterDeep > 0, 'earned=' + S.life.sporesEarned + ' (deep=' + sporesAfterDeep + ')');
+
 // [E13] 용혼 노드 구매 연타 → 음수/초과 방지
 S.souls = 2;
 buySoulNode('atk'); buySoulNode('atk'); buySoulNode('atk');  // 비용 1,2,... → 2용혼으로 1레벨만
@@ -251,6 +261,7 @@ for (let min = 0; min < 90; min++) {
   if (!Number.isFinite(S.souls) || S.souls < 0) bad.push('용혼=' + S.souls);
   if (Object.values(S.soulTree).some(v => !Number.isInteger(v) || v < 0)) bad.push('용혼트리손상');
   if (S.life.soulsEarned > soulTotalFor(S.life.bestStage)) bad.push('용혼초과지급');
+  if (S.life.sporesEarned > sporeTotalFor(S.life.bestStage)) bad.push('포자초과지급');
   if (bad.length) chaosIssues.push('[' + min + '분] ' + bad.join(', '));
 }
 report('진행: stage=' + S.maxStage + ' lv=' + S.level + ' 🗼' + S.tower + ' 환생' + S.life.rebirths + ' 💎' + Math.floor(S.dia));
